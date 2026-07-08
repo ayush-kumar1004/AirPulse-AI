@@ -52,17 +52,18 @@ def _ward_centroid(ward_id: str) -> tuple[float, float]:
     return 77.20, 28.61
 
 
-def _nearest_industrial_zone(ward_lon: float, ward_lat: float) -> tuple[float, str]:
-    """Return (distance_km, zone_name) to the closest industrial zone."""
+def _nearest_industrial_zone(ward_lon: float, ward_lat: float) -> tuple[float, str, float, float]:
+    """Return (distance_km, zone_name, zone_lon, zone_lat) for the closest industrial zone."""
     data = _load_geojson(INDUSTRIAL_ZONES_PATH)
-    best_km, best_name = float("inf"), "none"
+    best_km, best_name, best_lon, best_lat = float("inf"), "none", ward_lon, ward_lat
     for feature in data["features"]:
         zlon, zlat = _polygon_centroid(feature["geometry"]["coordinates"])
         # Flat-earth approx is fine at city scale: 1 degree latitude ~= 111 km.
         km = math.hypot((zlon - ward_lon) * 96, (zlat - ward_lat) * 111)
         if km < best_km:
             best_km, best_name = km, feature["properties"].get("zone_name", "industrial zone")
-    return best_km, best_name
+            best_lon, best_lat = zlon, zlat
+    return best_km, best_name, best_lon, best_lat
 
 
 def _bearing_deg(from_lon, from_lat, to_lon, to_lat) -> float:
@@ -73,7 +74,7 @@ def _bearing_deg(from_lon, from_lat, to_lon, to_lat) -> float:
 
 def _industry_signal(ward_id: str, wind_dir: str | None) -> tuple[float, dict]:
     ward_lon, ward_lat = _ward_centroid(ward_id)
-    distance_km, zone_name = _nearest_industrial_zone(ward_lon, ward_lat)
+    distance_km, zone_name, zone_lon, zone_lat = _nearest_industrial_zone(ward_lon, ward_lat)
 
     # Proximity score: 1.0 right next to a zone, fading to 0 by ~10km out.
     proximity = max(0.0, 1 - distance_km / 10)
@@ -81,9 +82,7 @@ def _industry_signal(ward_id: str, wind_dir: str | None) -> tuple[float, dict]:
     # Wind boost: if wind blows FROM the zone's direction TOWARD the ward, pollution carries over.
     boost = 1.0
     if wind_dir and wind_dir in WIND_COMPASS_DEGREES:
-        data = _load_geojson(INDUSTRIAL_ZONES_PATH)
-        zlon, zlat = _polygon_centroid(data["features"][0]["geometry"]["coordinates"])
-        bearing_ward_to_zone = _bearing_deg(ward_lon, ward_lat, zlon, zlat)
+        bearing_ward_to_zone = _bearing_deg(ward_lon, ward_lat, zone_lon, zone_lat)
         wind_deg = WIND_COMPASS_DEGREES[wind_dir]
         alignment = math.cos(math.radians(bearing_ward_to_zone - wind_deg))  # 1 = perfectly aligned
         boost = 1 + 0.6 * max(0.0, alignment)
