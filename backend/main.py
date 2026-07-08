@@ -1,4 +1,4 @@
-"""AirIntel backend — single FastAPI app. Imports every owner's router.
+"""AirPulse AI backend — single FastAPI app. Imports every owner's router.
 
 Shared file: change routing/CORS only by team agreement. Runs clean from commit #1 —
 each router ships mock responses until its owner adds real logic.
@@ -12,7 +12,7 @@ from app.routers import agents, data, forecast, health, sources
 settings = get_settings()
 
 app = FastAPI(
-    title="AirIntel API",
+    title="AirPulse AI API",
     description="AI-Powered Urban Air Quality Intelligence — single-city prototype.",
     version="0.1.0",
 )
@@ -36,4 +36,4 @@ app.include_router(agents.router)                       # Person C
 
 @app.get("/")
 def root():
-    return {"app": "AirIntel", "city": settings.city, "docs": "/docs"}
+    return {"app": "AirPulse AI", "city": settings.city, "docs": "/docs"}

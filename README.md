@@ -1,4 +1,4 @@
-# AirIntel — AI-Powered Urban Air Quality Intelligence
+# AirPulse AI — AI-Powered Urban Air Quality Intelligence
 
 ET AI Hackathon Round 2 · Single-city prototype (**Delhi** by default — swap via `CITY` env var).
 

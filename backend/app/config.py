@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     log_level: str = "info"
 
     # Infra (Person A)
-    database_url: str = "postgresql://airintel:airintel@localhost:5432/airintel"
+    database_url: str = "postgresql://airpulse:airpulse@localhost:5432/airpulse"
     redis_url: str = "redis://localhost:6379/0"
 
     # External data (Person A)

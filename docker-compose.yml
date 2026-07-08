@@ -2,24 +2,24 @@
 services:
   db:
     image: postgis/postgis:16-3.4
-    container_name: airintel_db
+    container_name: airpulse_db
     environment:
-      POSTGRES_USER: airintel
-      POSTGRES_PASSWORD: airintel
-      POSTGRES_DB: airintel
+      POSTGRES_USER: airpulse
+      POSTGRES_PASSWORD: airpulse
+      POSTGRES_DB: airpulse
     ports:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U airintel"]
+      test: ["CMD-SHELL", "pg_isready -U airpulse"]
       interval: 5s
       timeout: 5s
       retries: 10
 
   redis:
     image: redis:7-alpine
-    container_name: airintel_redis
+    container_name: airpulse_redis
     ports:
       - "6379:6379"
     healthcheck:
@@ -30,12 +30,12 @@ services:
 
   backend:
     build: ./backend
-    container_name: airintel_backend
+    container_name: airpulse_backend
     env_file:
       - ./backend/.env
     environment:
       # override host values so containers talk to each other by service name
-      DATABASE_URL: postgresql://airintel:airintel@db:5432/airintel
+      DATABASE_URL: postgresql://airpulse:airpulse@db:5432/airpulse
       REDIS_URL: redis://redis:6379/0
     ports:
       - "8000:8000"
@@ -50,7 +50,7 @@ services:
 
   frontend:
     build: ./frontend
-    container_name: airintel_frontend
+    container_name: airpulse_frontend
     env_file:
       - ./frontend/.env
     ports:

@@ -1,4 +1,4 @@
-# Stitch Design Prompts — AirIntel (5 screens)
+# Stitch Design Prompts — AirPulse AI (5 screens)
 Paste the STYLE block first (or set it as your Stitch theme), then use each screen prompt.
 Officer screens = dark "control-room" look. Citizen screen = light, friendly, mobile.
 Tip: keep the real sample text in each prompt — real numbers make the design look finished, not empty.
@@ -6,7 +6,7 @@ Tip: keep the real sample text in each prompt — real numbers make the design l
 ================================================================
 ## 0. GLOBAL STYLE (use for every screen — keeps them consistent)
 ================================================================
-Design a modern, premium data-dashboard web app called "AirIntel" — an AI air-quality command centre
+Design a modern, premium data-dashboard web app called "AirPulse AI" — an AI air-quality command centre
 for a smart city (Delhi). Style: clean, high-end SaaS control-room, think Linear + Stripe + a mission
 dashboard. Professional and government-grade but sleek and futuristic.
 
@@ -31,9 +31,9 @@ Add small clean line icons. Make it look award-winning and screenshot-ready.
 ================================================================
 ## 1. CITY DASHBOARD  (route "/")
 ================================================================
-Design the main overview screen of the AirIntel air-quality dashboard (use the global dark style).
+Design the main overview screen of the AirPulse AI air-quality dashboard (use the global dark style).
 
-Top bar: left = "AirIntel" logo with a small air/wind icon; centre = city name "Delhi" with a live
+Top bar: left = "AirPulse AI" logo with a small air/wind icon; centre = city name "Delhi" with a live
 green "LIVE" dot and timestamp "Updated 9:00 AM"; right = a search box and a user avatar.
 
 Below, a row of 4 big KPI stat cards:
@@ -56,7 +56,7 @@ Make it feel like a live mission control screen — glanceable, confident, impre
 ================================================================
 ## 2. POLLUTION MAP  (route "/map")  — the hero screen
 ================================================================
-Design a full-screen interactive city pollution map screen for AirIntel (global dark style). This is
+Design a full-screen interactive city pollution map screen for AirPulse AI (global dark style). This is
 the flagship screen, make it stunning.
 
 Layout: a large interactive map fills about 70% of the screen (left/centre), showing Delhi divided
@@ -81,7 +81,7 @@ Make the map look premium and alive, like Google Maps meets a data command centr
 ================================================================
 ## 3. FORECAST SCREEN  (route "/forecast")
 ================================================================
-Design an AQI forecast screen for AirIntel (global dark style).
+Design an AQI forecast screen for AirPulse AI (global dark style).
 
 Top: a title "AQI Forecast" with, on the right, a ward selector dropdown ("Rohini") and a segmented
 time toggle "24h | 48h | 72h" (48h selected, cyan accent).
@@ -104,7 +104,7 @@ Clean, data-focused, easy to read at a glance.
 ================================================================
 ## 4. GOVERNMENT DASHBOARD  (route "/government")
 ================================================================
-Design a government action dashboard for AirIntel (global dark style) — for a city pollution officer.
+Design a government action dashboard for AirPulse AI (global dark style) — for a city pollution officer.
 
 Two-column layout.
 
@@ -119,7 +119,7 @@ Below actions: an "Inspection Priority" mini table with columns Site | Ward | Re
 priority shown as a coloured number badge (1 = red). 3 rows of sample data.
 
 Right column "Officer Assistant" — a chat panel:
-- A chat header "Ask AirIntel".
+- A chat header "Ask AirPulse AI".
 - A conversation: officer bubble "Which ward should inspectors visit first?" and an AI bubble
   answering "Rohini — AQI 241 (severe), mostly traffic. It stays severe through tomorrow morning."
 - Under the AI reply, small grey chips: "used: AQI, Source, Forecast".
@@ -130,7 +130,7 @@ Make it feel like a serious decision-making tool that a real commissioner would 
 ================================================================
 ## 5. CITIZEN VIEW  (route "/citizen")  — LIGHT + MOBILE
 ================================================================
-Design a friendly mobile-first citizen health screen for AirIntel. Different mood from the dashboards:
+Design a friendly mobile-first citizen health screen for AirPulse AI. Different mood from the dashboards:
 LIGHT theme, warm, calm, and very simple — one screen, no clutter. Soft white/very-light background,
 rounded cards, big friendly text, the same AQI colour scale for status.
 
