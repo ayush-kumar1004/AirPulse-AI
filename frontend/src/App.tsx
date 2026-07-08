@@ -13,7 +13,7 @@ export default function App() {
   return (
     <div className="min-h-screen">
       <nav className="flex flex-wrap gap-4 bg-slate-900 px-6 py-3 text-white">
-        <span className="font-bold">AirIntel</span>
+        <span className="font-bold">AirPulse AI</span>
         <NavLink to="/" end className={({ isActive }) => (isActive ? active : link)}>City Dashboard</NavLink>
         <NavLink to="/map" className={({ isActive }) => (isActive ? active : link)}>Pollution Map</NavLink>
         <NavLink to="/forecast" className={({ isActive }) => (isActive ? active : link)}>Forecast</NavLink>
