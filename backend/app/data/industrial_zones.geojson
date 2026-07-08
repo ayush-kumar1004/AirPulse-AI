@@ -1,0 +1,14 @@
+{
+  "type": "FeatureCollection",
+  "_comment": "TODO: Person A — SEMI-REAL static overlay. Manually digitise known industrial areas for the chosen city (DOCX 2.2). Person B's source attribution uses proximity to these polygons. Placeholder below.",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": { "zone_id": "IND01", "zone_name": "Okhla Industrial Area" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[77.27, 28.53], [77.30, 28.53], [77.30, 28.55], [77.27, 28.55], [77.27, 28.53]]]
+      }
+    }
+  ]
+}

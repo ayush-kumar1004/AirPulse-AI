@@ -1,0 +1,22 @@
+{
+  "type": "FeatureCollection",
+  "_comment": "TODO: Person A — replace with REAL ward boundaries for the chosen city (Delhi default). Two placeholder wards below just so the map + /api/data/wards render from commit #1.",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": { "ward_id": "W01", "ward_name": "Connaught Place" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[77.21, 28.63], [77.23, 28.63], [77.23, 28.645], [77.21, 28.645], [77.21, 28.63]]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "ward_id": "W02", "ward_name": "Rohini" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[77.10, 28.73], [77.14, 28.73], [77.14, 28.76], [77.10, 28.76], [77.10, 28.73]]]
+      }
+    }
+  ]
+}
