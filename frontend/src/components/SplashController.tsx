@@ -16,11 +16,6 @@ export default function SplashController({ children }: SplashControllerProps) {
   // but showing it on first load of the application fits the prompt requirements perfectly.
   const handleFinish = () => {
     setShowSplash(false);
-    // Navigate smoothly to the City Dashboard.
-    // If the user isn't already on the dashboard, navigate there.
-    if (location.pathname !== "/") {
-      navigate("/", { replace: true });
-    }
   };
 
   if (showSplash) {
