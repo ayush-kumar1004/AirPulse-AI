@@ -73,17 +73,23 @@ and industrial-zone signals are **simulated** with rules-based patterns — stat
 **Rule: nobody changes a response shape after Day 2 without messaging the whole team.**
 Frontend pages: City Dashboard `/`, Pollution Map `/map`, Forecast `/forecast`, Government `/government`, Citizen `/citizen`.
 
+> **Update (Person A's real implementation):** the query param is `ward_id`, not `ward` as in the
+> original draft below. Person B's endpoints were updated to match. Person C's endpoints (`/api/recommend`,
+> `/api/advisory`) still use `ward` — flagged for Mukul to align to `ward_id` too so it's consistent everywhere.
+> `/api/aqi` and `/api/heatmap` also now require Postgres + Redis running (`docker compose up`) since they're real, DB-backed.
+
 | Method | Path | Owner | Returns |
 |--------|------|-------|---------|
 | GET | `/health` | shared | Liveness + city/env |
-| GET | `/api/wards` | A | Ward GeoJSON polygons + metadata |
-| GET | `/api/aqi?ward=X` | A | Current AQI + pollutant breakdown for a ward |
-| GET | `/api/weather?ward=X` | A | Current + forecast weather for a ward |
-| GET | `/api/heatmap` | A | Per-ward AQI snapshot for map colouring (all wards) |
-| GET | `/api/traffic?ward=X` | A | Simulated traffic density score |
-| GET | `/api/construction?ward=X` | A | Simulated active construction sites |
-| GET | `/api/predict?ward=X&horizon=24\|48\|72` | B | 24/48/72h AQI forecast array |
-| GET | `/api/source-attribution?ward=X` | B | % breakdown by source + confidence + raw factors |
+| GET | `/api/wards` | A | Ward GeoJSON polygons + metadata (290 real Delhi wards) |
+| GET | `/api/aqi?ward_id=X` | A | Current AQI + pollutant breakdown for a ward (real, DB-backed) |
+| GET | `/api/weather?ward_id=X` | A | Current weather for a ward (real, Open-Meteo) |
+| GET | `/api/aqi/history?ward_id=X&days=30` | A | Historical AQI records for a ward (new — real DB rows accumulate over time) |
+| GET | `/api/heatmap` | A | Per-ward AQI snapshot for map colouring (all wards, real, DB-backed) |
+| GET | `/api/traffic?ward_id=X` | A | Simulated traffic density score (deterministic, time-of-day aware) |
+| GET | `/api/construction?ward_id=X` | A | Simulated active construction sites |
+| GET | `/api/predict?ward_id=X&horizon=24\|48\|72` | B | 24/48/72h AQI forecast array |
+| GET | `/api/source-attribution?ward_id=X` | B | % breakdown by source + confidence + raw factors |
 | GET | `/api/recommend?ward=X` | C | Ranked government actions + inspection priority |
 | GET | `/api/advisory?ward=X&lang=hi&context=asthma` | C | Citizen health advisory (multilingual) |
 | POST | `/api/chat` | C | Officer chat agent response (tool-using) |

@@ -28,7 +28,7 @@ app.add_middleware(
 
 # One router per owner. Prefixes are the API contract — see README endpoint table.
 app.include_router(health.router)                       # shared
-app.include_router(data.router)                         # Person A
+app.include_router(data.router, prefix="/api")          # Person A
 app.include_router(forecast.router)                     # Person B
 app.include_router(sources.router)                      # Person B
 app.include_router(agents.router)                       # Person C

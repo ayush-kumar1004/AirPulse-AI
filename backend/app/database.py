@@ -1,22 +1,12 @@
-# TODO: Person A — Postgres + PostGIS connection (SQLAlchemy engine, session, Base, get_db()).
-from sqlalchemy import create_engine
-from sqlalchemy.orm import declarative_base, sessionmaker
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+from sqlalchemy.orm import declarative_base
+from app.config import settings
 
-from app.config import get_settings
+engine = create_async_engine(settings.SQLALCHEMY_DATABASE_URI, echo=False)
+AsyncSessionLocal = async_sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
 
-settings = get_settings()
-
-# TODO: Person A — tune pool settings; ensure PostGIS extension is created on startup
-#   (run: CREATE EXTENSION IF NOT EXISTS postgis;)
-engine = create_engine(settings.database_url, pool_pre_ping=True, future=True)
-SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 Base = declarative_base()
 
-
-def get_db():
-    """FastAPI dependency — yields a DB session and always closes it."""
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+async def get_db():
+    async with AsyncSessionLocal() as session:
+        yield session
