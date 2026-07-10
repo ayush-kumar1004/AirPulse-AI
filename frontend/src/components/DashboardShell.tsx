@@ -1,5 +1,5 @@
 import React from "react";
-import { NavLink, Outlet } from "react-router-dom";
+import { NavLink, Outlet, Link } from "react-router-dom";
 import {
   LayoutDashboard,
   Map,
@@ -126,18 +126,25 @@ export default function DashboardShell() {
 
         {/* Generate Report Button, Settings & Help */}
         <div className="space-y-4">
-          <button className="w-full bg-[#22D3EE] text-[#001f25] font-semibold py-3 rounded-xl hover:brightness-110 active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(34,211,238,0.3)]">
+          <Link
+            to="/report"
+            className="w-full bg-[#22D3EE] text-[#001f25] font-semibold py-3 rounded-xl hover:brightness-110 active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(34,211,238,0.3)]"
+          >
             <PlusCircle className="w-5 h-5" />
             <span className="text-xs uppercase tracking-wider font-bold">Generate Report</span>
-          </button>
+          </Link>
           <div className="space-y-1">
-            <a
-              className="flex items-center gap-3 text-[#bbc9cd]/60 px-4 py-2 hover:text-[#22D3EE] text-xs font-semibold uppercase tracking-wider transition-colors"
-              href="#support"
+            <NavLink
+              to="/support"
+              className={({ isActive }) =>
+                isActive
+                  ? "flex items-center gap-3 bg-[#22D3EE]/10 text-[#22D3EE] border-l-4 border-[#22D3EE] px-4 py-2 text-xs font-semibold uppercase tracking-wider transition-all"
+                  : "flex items-center gap-3 text-[#bbc9cd]/60 px-4 py-2 hover:text-[#22D3EE] text-xs font-semibold uppercase tracking-wider transition-all"
+              }
             >
               <HelpCircle className="w-4 h-4" />
               <span>Support</span>
-            </a>
+            </NavLink>
             <a
               className="flex items-center gap-3 text-[#bbc9cd]/60 px-4 py-2 hover:text-[#22D3EE] text-xs font-semibold uppercase tracking-wider transition-colors"
               href="#settings"
