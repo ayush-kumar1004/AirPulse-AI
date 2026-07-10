@@ -15,6 +15,7 @@ import {
   Building,
 } from "lucide-react";
 import ParticleBackground from "./ParticleBackground";
+import logo from "../assets/airpulse-logo.svg";
 
 export default function DashboardShell() {
   // Stitch Cyan primary theme colors for active/inactive links
@@ -38,7 +39,7 @@ export default function DashboardShell() {
           <img
             alt="AirPulse AI Logo"
             className="h-8 w-8 object-contain"
-            src="https://lh3.googleusercontent.com/aida/AP1WRLvzYYDJS6SJ-M_2wm58kOZVZoh8KH92cSWwd8GODu1WshrWrfsRFHl1h_gTy1VoqjhEgInMn3F6OlTBhYsa51f0sBv7yrJql6ZgsbT0wPnVhJC1nriLGk3w1a5KYiAdwLGbFGZ5T0a_kuXokk_ILkK2gvex5Ev3WBsl5-qOVdsslOVrx6ZXpxlc_JEk5qzmU0xxMK-vOhfydSGd6diei-cQw64dhPlo9KvgIp79hmsfpiGa5mA1KORKWPg"
+            src={logo}
           />
           <span className="text-xl font-bold text-[#22D3EE] tracking-tight">AirPulse AI</span>
         </div>
@@ -56,13 +57,6 @@ export default function DashboardShell() {
           <button className="p-2 text-[#bbc9cd] hover:text-[#22D3EE] hover:bg-[#1E293B] transition-colors rounded-full focus:outline-none">
             <Bell className="w-5 h-5" />
           </button>
-          <div className="w-8 h-8 rounded-full border border-[#3c494c]/40 overflow-hidden cursor-pointer active:scale-95 transition-transform">
-            <img
-              alt="Profile"
-              className="w-full h-full object-cover"
-              src="https://lh3.googleusercontent.com/aida-public/AB6AXuDSG-HFMNerxL6Xv8iT4uOr6i1IK6UY_4U3wz8TGiyrnSs00XXrS_W9fq8gjqsbO9CYhtHDZcyoKcYj2VNTrPIV6UndyIA60hsh9oSjBpcyFo72NIh499XEmriurNplJW8ADqA1JkEMOhchVT20pEZa8Sb9e97-J1Xg8hvwA0p3zLXTQ1Wd1y9Eh1rp-RS6rrDCS9sd98BsOe8r7ghzXHZdNdqWC_UaVMN9QqBCv8HSa-zGGVJMdC6OBD9tpKGdE3w4sq1irE1h6NAc"
-            />
-          </div>
         </div>
       </header>
 
@@ -151,13 +145,6 @@ export default function DashboardShell() {
             >
               <Settings className="w-4 h-4" />
               <span>Settings</span>
-            </a>
-            <a
-              className="flex items-center gap-3 text-[#bbc9cd]/60 px-4 py-2 hover:text-red-400 text-xs font-semibold uppercase tracking-wider transition-colors border-t border-[#3c494c]/20 pt-2 mt-2"
-              href="#logout"
-            >
-              <LogOut className="w-4 h-4" />
-              <span>Sign Out</span>
             </a>
           </div>
         </div>

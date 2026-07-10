@@ -2,6 +2,7 @@ import React, { useEffect } from "react";
 import { motion } from "framer-motion";
 import { TrendingUp } from "lucide-react";
 import ParticleBackground from "./ParticleBackground";
+import logo from "../assets/airpulse-logo.svg";
 
 interface SplashScreenProps {
   onFinish: () => void;
@@ -74,7 +75,7 @@ export default function SplashScreen({ onFinish }: SplashScreenProps) {
               }}
               alt="AirPulse AI Premium Logo"
               className="w-full h-full object-contain"
-              src="https://lh3.googleusercontent.com/aida-public/AB6AXuAKrsPKVJ67ZmNfcf2hxypF5f-LnsqGyobUhJTT7Hmx3UWrZqvLOi8VnfmCZ5o_uVstsoBtdE9hIr40mmdZrmYCpGg1rUVsLlAKpLsfaBH78kYtsMO7LqJmake-WxnDmZrT3dDxKb-QEVJEC8q0YFlOroSIl5btkDkGuPm8P92EBZJoMuX449DKmGsPIRUMBA12REkjaguLicnj6GUpWwoSzygVOgP7IlCdFAZ6a1czgNcrHoWkcY_uJ5dQ18tBsHQ4XbgFM2pqnf2E"
+              src={logo}
             />
           </div>
         </motion.div>
