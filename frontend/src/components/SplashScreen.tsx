@@ -2,7 +2,7 @@ import React, { useEffect } from "react";
 import { motion } from "framer-motion";
 import { TrendingUp } from "lucide-react";
 import ParticleBackground from "./ParticleBackground";
-import logo from "../assets/airpulse-logo.svg";
+import logo from "../assets/airpulse-logo.png";
 
 interface SplashScreenProps {
   onFinish: () => void;

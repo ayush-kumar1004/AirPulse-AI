@@ -15,7 +15,7 @@ import {
   Building,
 } from "lucide-react";
 import ParticleBackground from "./ParticleBackground";
-import logo from "../assets/airpulse-logo.svg";
+import logo from "../assets/airpulse-logo.png";
 
 export default function DashboardShell() {
   // Stitch Cyan primary theme colors for active/inactive links
