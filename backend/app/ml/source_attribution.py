@@ -1,22 +1,27 @@
 """Person B — TRANSPARENT weighted-scoring source attribution (NOT a black-box classifier).
 
 Combines four raw signals into a percentage split across traffic / construction / industry / dust:
-  - traffic_index        <- Person A, /api/traffic (SIMULATED)
-  - active_sites         <- Person A, /api/construction (SIMULATED)
+  - traffic_index        <- Person A, app.data_ingestion.synthetic.get_traffic (SIMULATED)
+  - active_sites         <- Person A, app.data_ingestion.synthetic.get_construction (SIMULATED)
   - industry proximity   <- static industrial_zones.geojson + ward centroid distance
-  - wind direction/speed <- Person A, /api/weather (REAL, Open-Meteo)
+  - wind direction/speed <- Person A, app.data_ingestion.weather_ingest.get_weather (REAL, Open-Meteo)
   - dust heuristic        <- derived from humidity/wind/rain (no direct dust sensor exists)
 
 Every number here can be explained to a judge — that is the point of choosing a weighted
 scoring model over a black-box classifier.
+
+Updated to match Person A's async DB layer (feat/data-suchit): wind direction now arrives as a
+float in degrees (0-360) rather than a compass string, and weather/AQI are async DB-backed calls.
 """
 import json
 import math
+from datetime import datetime, timezone
 from pathlib import Path
 
-from app.routers.data import construction as construction_ep
-from app.routers.data import traffic as traffic_ep
-from app.routers.data import weather as weather_ep
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.data_ingestion.synthetic import get_construction, get_traffic
+from app.data_ingestion.weather_ingest import get_weather
 
 WARDS_PATH = Path(__file__).resolve().parent.parent / "data" / "wards.geojson"
 INDUSTRIAL_ZONES_PATH = Path(__file__).resolve().parent.parent / "data" / "industrial_zones.geojson"
@@ -25,10 +30,12 @@ INDUSTRIAL_ZONES_PATH = Path(__file__).resolve().parent.parent / "data" / "indus
 # Tune these during the build if a demo scenario needs it — keep the change small and explainable.
 BASE_WEIGHTS = {"traffic": 0.40, "construction": 0.25, "industry": 0.20, "dust": 0.15}
 
-WIND_COMPASS_DEGREES = {
-    "N": 0, "NE": 45, "E": 90, "SE": 135,
-    "S": 180, "SW": 225, "W": 270, "NW": 315,
-}
+COMPASS_LABELS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
+
+
+def _compass_label(degrees: float) -> str:
+    """Nearest 8-point compass label, for the human-readable reasoning text only."""
+    return COMPASS_LABELS[round(degrees / 45) % 8]
 
 
 def _polygon_centroid(coordinates) -> tuple[float, float]:
@@ -46,9 +53,9 @@ def _load_geojson(path: Path) -> dict:
 def _ward_centroid(ward_id: str) -> tuple[float, float]:
     data = _load_geojson(WARDS_PATH)
     for feature in data["features"]:
-        if feature["properties"]["ward_id"] == ward_id:
+        if feature["properties"].get("ward_id") == ward_id:
             return _polygon_centroid(feature["geometry"]["coordinates"])
-    # Ward not found in the placeholder file yet — fall back to a fixed Delhi-ish point.
+    # Ward not found (e.g. bad ward_id) — fall back to a fixed Delhi-ish point.
     return 77.20, 28.61
 
 
@@ -61,7 +68,8 @@ def _nearest_industrial_zone(ward_lon: float, ward_lat: float) -> tuple[float, s
         # Flat-earth approx is fine at city scale: 1 degree latitude ~= 111 km.
         km = math.hypot((zlon - ward_lon) * 96, (zlat - ward_lat) * 111)
         if km < best_km:
-            best_km, best_name = km, feature["properties"].get("zone_name", "industrial zone")
+            # Person A's industrial_zones.geojson uses "name", not "zone_name".
+            best_km, best_name = km, feature["properties"].get("name", "industrial zone")
             best_lon, best_lat = zlon, zlat
     return best_km, best_name, best_lon, best_lat
 
@@ -72,7 +80,7 @@ def _bearing_deg(from_lon, from_lat, to_lon, to_lat) -> float:
     return (90 - math.degrees(math.atan2(dy, dx))) % 360
 
 
-def _industry_signal(ward_id: str, wind_dir: str | None) -> tuple[float, dict]:
+def _industry_signal(ward_id: str, wind_deg: float | None) -> tuple[float, dict]:
     ward_lon, ward_lat = _ward_centroid(ward_id)
     distance_km, zone_name, zone_lon, zone_lat = _nearest_industrial_zone(ward_lon, ward_lat)
 
@@ -81,9 +89,8 @@ def _industry_signal(ward_id: str, wind_dir: str | None) -> tuple[float, dict]:
 
     # Wind boost: if wind blows FROM the zone's direction TOWARD the ward, pollution carries over.
     boost = 1.0
-    if wind_dir and wind_dir in WIND_COMPASS_DEGREES:
+    if wind_deg is not None:
         bearing_ward_to_zone = _bearing_deg(ward_lon, ward_lat, zone_lon, zone_lat)
-        wind_deg = WIND_COMPASS_DEGREES[wind_dir]
         alignment = math.cos(math.radians(bearing_ward_to_zone - wind_deg))  # 1 = perfectly aligned
         boost = 1 + 0.6 * max(0.0, alignment)
 
@@ -91,47 +98,43 @@ def _industry_signal(ward_id: str, wind_dir: str | None) -> tuple[float, dict]:
     return score, {"nearest_zone": zone_name, "distance_km": round(distance_km, 2), "wind_boost": round(boost, 2)}
 
 
-def _dust_signal(weather: dict) -> float:
+def _dust_signal(humidity: float, wind_kph: float, rain_mm: float) -> float:
     """No direct dust sensor exists, so approximate: dry + windy + no rain raises dust."""
-    humidity = weather.get("humidity", 50)
-    wind_kph = weather.get("wind_kph", 5)
-    rain_mm = weather.get("rain_mm", 0)
     dust = (1 - humidity / 100) * 0.5 + min(wind_kph / 40, 1) * 0.5 - min(rain_mm / 5, 1) * 0.3
     return max(0.0, min(dust, 1.0))
 
 
-def _confidence(traffic_note: str, construction_note: str, weather: dict) -> float:
+def _confidence(traffic_note: str, construction_note: str) -> float:
     """Lower confidence when an input feeding the score is simulated rather than real."""
     confidence = 0.90
     if "SIMULATED" in traffic_note:
         confidence -= 0.08
     if "SIMULATED" in construction_note:
         confidence -= 0.06
-    if not weather.get("wind_dir"):
-        confidence -= 0.10
     return round(max(0.5, min(confidence, 0.95)), 2)
 
 
-def _reasoning(shares: dict, industry_meta: dict, weather: dict) -> str:
+def _reasoning(shares: dict, industry_meta: dict, wind_dir_label: str, wind_kph: float) -> str:
     dominant = max(shares, key=shares.get)
     parts = [f"{k.title()} contributes {v*100:.0f}%" for k, v in sorted(shares.items(), key=lambda kv: -kv[1])]
     text = f"{dominant.title()} is the dominant source. " + "; ".join(parts) + "."
     if shares["industry"] > 0.15:
-        text += (f" Wind ({weather.get('wind_dir', 'n/a')} at {weather.get('wind_kph', '?')} kph) is carrying "
-                 f"pollution from {industry_meta['nearest_zone']} ({industry_meta['distance_km']} km away).")
+        text += (f" Wind ({wind_dir_label} at {wind_kph} kph) is carrying pollution from "
+                 f"{industry_meta['nearest_zone']} ({industry_meta['distance_km']} km away).")
     return text
 
 
-def attribute(ward_id: str) -> dict:
+async def attribute(session: AsyncSession, ward_id: str) -> dict:
     """Return {'ward_id','traffic','construction','industry','dust','confidence','raw_factors','reasoning'}."""
-    traffic_data = traffic_ep(ward_id)
-    construction_data = construction_ep(ward_id)
-    weather_data = weather_ep(ward_id)
+    now = datetime.now(timezone.utc)
+    traffic_data = get_traffic(ward_id=ward_id, dt=now)              # sync
+    construction_data = get_construction(ward_id=ward_id, dt=now)    # sync
+    weather_data = await get_weather(session=session, ward_id=ward_id)  # async, real (Open-Meteo)
 
     traffic_score = traffic_data.traffic_index
     construction_score = min(construction_data.active_sites / 3, 1.0)
-    industry_score, industry_meta = _industry_signal(ward_id, weather_data.get("wind_dir"))
-    dust_score = _dust_signal(weather_data)
+    industry_score, industry_meta = _industry_signal(ward_id, weather_data.wind_direction)
+    dust_score = _dust_signal(weather_data.humidity, weather_data.wind_speed, weather_data.precipitation)
 
     raw = {"traffic": traffic_score, "construction": construction_score,
            "industry": industry_score, "dust": dust_score}
@@ -139,8 +142,9 @@ def attribute(ward_id: str) -> dict:
     total = sum(weighted.values()) or 1e-9
     shares = {k: round(v / total, 3) for k, v in weighted.items()}
 
-    confidence = _confidence(traffic_data.note, construction_data.note, weather_data)
-    reasoning = _reasoning(shares, industry_meta, weather_data)
+    confidence = _confidence(traffic_data.note, construction_data.note)
+    wind_label = _compass_label(weather_data.wind_direction)
+    reasoning = _reasoning(shares, industry_meta, wind_label, weather_data.wind_speed)
 
     return {
         "ward_id": ward_id,
@@ -153,8 +157,9 @@ def attribute(ward_id: str) -> dict:
             "traffic_index": traffic_score,
             "construction_sites": construction_data.active_sites,
             **industry_meta,
-            "wind_dir": weather_data.get("wind_dir"),
-            "wind_kph": weather_data.get("wind_kph"),
+            "wind_dir": wind_label,
+            "wind_deg": weather_data.wind_direction,
+            "wind_kph": weather_data.wind_speed,
             "dust_index": round(dust_score, 3),
         },
         "reasoning": reasoning,
