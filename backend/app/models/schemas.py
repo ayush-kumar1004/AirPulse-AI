@@ -1,48 +1,92 @@
 # SHARED Pydantic response schemas — the API contract (DOCX Section 6, the single source of truth).
 # RULE: nobody changes a response shape after Day 2 without messaging the whole team.
 # These shapes MUST match what routers return (mock or real).
-from typing import Optional
-
-from pydantic import BaseModel
+from typing import Optional, List
+from datetime import datetime
+from pydantic import BaseModel, Field
 
 # ---------------------------------------------------------------------------
 # Person A — data
 # ---------------------------------------------------------------------------
 
 
+class WardMetadata(BaseModel):
+    """
+    Metadata about a specific ward in the city.
+    """
+    ward_id: str = Field(..., description="Unique identifier for the ward")
+    name: str = Field(..., description="Name of the ward")
+    area_sqkm: float = Field(..., description="Area of the ward in square kilometers")
+    population: Optional[int] = Field(None, description="Estimated population of the ward")
+
+
 class WardAQI(BaseModel):
-    """GET /api/aqi?ward=X — current AQI + pollutant breakdown for one ward."""
-    ward_id: str
-    ward_name: str
-    aqi: int
-    category: str            # CPCB: good | satisfactory | moderate | poor | very_poor | severe
-    pm25: Optional[float] = None
-    pm10: Optional[float] = None
-    no2: Optional[float] = None
-    updated_at: str
+    """
+    AQI information for a specific ward matching the API contract.
+    """
+    ward_id: str = Field(..., description="Unique identifier for the ward")
+    ward_name: str = Field(..., description="Name of the ward")
+    aqi: int = Field(..., description="Overall Air Quality Index value")
+    category: str = Field(..., description="AQI Category (e.g. Good, Moderate, Severe)")
+    pm25: float = Field(..., description="PM2.5 concentration")
+    pm10: float = Field(..., description="PM10 concentration")
+    no2: float = Field(..., description="NO2 concentration")
+    updated_at: datetime = Field(..., description="Time the reading was last updated")
 
 
 class HeatmapWard(BaseModel):
-    """GET /api/heatmap — one entry per ward, just enough to colour the map."""
-    ward_id: str
-    ward_name: str
-    aqi: int
-    category: str
+    """
+    Simplified ward data tailored for rendering the pollution heatmap on the frontend.
+    """
+    ward_id: str = Field(..., description="Unique identifier for the ward")
+    ward_name: str = Field(..., description="Name of the ward")
+    aqi: int = Field(..., description="Current AQI value for color coding")
+    category: str = Field(..., description="AQI Category (e.g. Good, Moderate, Severe)")
 
 
 class TrafficSignal(BaseModel):
-    """GET /api/traffic?ward=X — SIMULATED traffic density (rules-based)."""
-    ward_id: str
-    traffic_index: float     # 0..1, rush-hour weighted
-    note: str = "SIMULATED — rules-based, not live data"
+    """
+    Simulated traffic density data for a ward.
+    """
+    ward_id: str = Field(..., description="Unique identifier for the ward")
+    traffic_index: float = Field(..., ge=0.0, le=1.0, description="Traffic index score between 0.0 and 1.0")
+    note: str = Field(..., description="Additional context or notes about the traffic")
 
 
 class ConstructionSignal(BaseModel):
-    """GET /api/construction?ward=X — SIMULATED active construction sites (rules-based)."""
-    ward_id: str
-    active_sites: int
-    site_names: list[str] = []
-    note: str = "SIMULATED — rules-based, seeded with known project locations"
+    """
+    Simulated construction activity data for a ward.
+    """
+    ward_id: str = Field(..., description="Unique identifier for the ward")
+    active_sites: int = Field(..., description="Number of active construction sites in the ward")
+    site_names: List[str] = Field(..., description="List of names of active construction sites")
+    note: str = Field(..., description="Additional context or notes about the construction")
+
+
+class WeatherResponse(BaseModel):
+    """
+    Weather data for a given location, combining current conditions and forecasts.
+    """
+    ward_id: str = Field(..., description="Unique identifier for the ward")
+    timestamp: datetime = Field(..., description="Time of the weather reading")
+    temperature: float = Field(..., description="Temperature in Celsius")
+    humidity: float = Field(..., description="Relative humidity percentage")
+    wind_speed: float = Field(..., description="Wind speed in km/h")
+    wind_direction: float = Field(..., description="Wind direction in degrees")
+    precipitation: float = Field(..., description="Precipitation in mm")
+
+
+class AQIHistoryRecord(BaseModel):
+    """
+    Historical AQI reading for a specific ward.
+    """
+    timestamp: datetime = Field(..., description="Time of the reading")
+    aqi: int = Field(..., description="Overall AQI value")
+    category: str = Field(..., description="AQI Category")
+    pm25: float = Field(..., description="PM2.5 concentration")
+    pm10: float = Field(..., description="PM10 concentration")
+    no2: float = Field(..., description="NO2 concentration")
+
 
 
 # ---------------------------------------------------------------------------
