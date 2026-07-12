@@ -48,6 +48,8 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
     openai_api_key: str = ""
     kimi_api_key: str = ""
+    gemini_api_key: str = ""
+    gemini_model: str = "gemini-3.5-flash"
 
     # CORS
     frontend_origin: str = "http://localhost:5173"
