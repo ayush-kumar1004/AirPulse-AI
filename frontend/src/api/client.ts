@@ -20,10 +20,8 @@ async function post<T>(path: string, body: unknown): Promise<T> {
 }
 
 // --- Person A: data ---
-// NOTE: Person A's real implementation uses `ward_id` as the query param (not `ward` as in the
-// original contract draft). Person B's endpoints were updated to match for consistency. If Person C
-// still uses `ward=` on /api/recommend and /api/advisory, that's intentionally left as-is below
-// until agents.py is updated too — flag this to the team so everyone converges on `ward_id`.
+// NOTE: every endpoint uses `ward_id` as the query param (not `ward` as in the original contract
+// draft) — Person A's real implementation set this, and B/C's endpoints now match for consistency.
 export const getWards = () => get<any>("/api/wards");
 export const getAQI = (wardId: string) => get<any>(`/api/aqi?ward_id=${wardId}`);
 export const getWeather = (wardId: string) => get<any>(`/api/weather?ward_id=${wardId}`);
@@ -37,8 +35,8 @@ export const getPredict = (wardId: string, horizon = 24) =>
 export const getSourceAttribution = (wardId: string) => get<any>(`/api/source-attribution?ward_id=${wardId}`);
 
 // --- Person C: agents ---
-export const getRecommend = (ward: string) => get<any>(`/api/recommend?ward=${ward}`);
-export const getAdvisory = (ward: string, lang = "en", context?: string) =>
-  get<any>(`/api/advisory?ward=${ward}&lang=${lang}${context ? `&context=${context}` : ""}`);
+export const getRecommend = (wardId: string) => get<any>(`/api/recommend?ward_id=${wardId}`);
+export const getAdvisory = (wardId: string, lang = "en", context?: string) =>
+  get<any>(`/api/advisory?ward_id=${wardId}&lang=${lang}${context ? `&context=${context}` : ""}`);
 export const officerChat = (body: { message: string; ward_id?: string }) =>
   post<any>("/api/chat", body);
