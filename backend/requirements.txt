@@ -9,13 +9,15 @@ python-multipart==0.0.12
 # --- DB / cache (Person A) ---
 SQLAlchemy==2.0.35
 GeoAlchemy2==0.15.2
-psycopg2-binary==2.9.9
+psycopg2-binary==2.9.12   # 2.9.9 has no Python 3.13 Windows wheel; 2.9.12 does
 alembic==1.13.3
 redis==5.0.8
 
 # --- Data / geo (Person A + B) ---
 pandas==2.2.3
-numpy==1.26.4
+# numpy 1.26.4 has no official Windows wheel for Python 3.13 — pip silently falls back to a
+# community MINGW-built wheel that segfaults on import. numpy 2.x has real cp313 wheels.
+numpy>=2.1,<2.3
 geopandas==1.0.1
 shapely==2.0.6
 
@@ -30,7 +32,9 @@ requests==2.32.3
 APScheduler==3.10.4
 
 # --- LLM / agents (Person C) ---
-langchain==0.3.1
+# langchain 0.3.1 pinned numpy<2.0.0 (no cp313 wheel exists for that range); 0.3.30 is the same
+# 0.3.x line (no breaking API changes) and dropped that pin, so it installs cleanly alongside numpy 2.x.
+langchain==0.3.30
 langchain-anthropic==0.2.1
 langchain-openai==0.2.1
 langchain-google-genai==2.0.1
@@ -40,4 +44,4 @@ openai==1.51.0
 
 # --- Utils ---
 python-dotenv==1.0.1
-asyncpg==0.29.0
+asyncpg==0.31.0   # 0.29.0 has no Python 3.13 wheel and fails to build from source (CPython 3.13 C-API changes)
