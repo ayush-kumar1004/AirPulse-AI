@@ -36,42 +36,22 @@ export default function PollutionMap() {
   const [wardLoading, setWardLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Initial bulk fetching of global datasets (Promise.all)
+  // Initial fetch of global datasets — ONLY wards + heatmap (2 lightweight, cached calls).
+  // NOTE: we deliberately do NOT bulk-fetch /api/predict + /api/source-attribution for every
+  // ward here. Doing that for all 290 wards fires 580 parallel requests on page load, which
+  // overwhelms the backend and trips Open-Meteo's rate limit (503s) — see diagnostic_report.md.
+  // Predicted/source overlay colours are instead filled in incrementally as the user selects
+  // wards (see fetchWardDetails below); HeatMap.tsx already falls back to a neutral colour for
+  // any ward not yet visited.
   const fetchGlobalData = useCallback(async () => {
     try {
       setInitialLoading(true);
       setError(null);
 
-      // 1. Fetch base wards GeoJSON and current AQI heatmap in parallel
       const [wardsRes, heatmapRes] = await Promise.all([getWards(), getHeatmap()]);
 
       setWardsGeoJson(wardsRes);
       setHeatmapData(heatmapRes);
-
-      // Extract all unique ward IDs
-      const features = wardsRes?.features || [];
-      const ids: string[] = features.map((f: any) => f.properties.ward_id);
-
-      // 2. Fetch predicted and source attribution data for all wards in parallel to support overlays
-      const predictionPromises = ids.map((id) => getPredict(id, 24));
-      const sourcePromises = ids.map((id) => getSourceAttribution(id));
-
-      const [predictionsList, sourcesList] = await Promise.all([
-        Promise.all(predictionPromises),
-        Promise.all(sourcePromises),
-      ]);
-
-      // Cache datasets into key-value maps
-      const predMap: Record<string, any> = {};
-      const srcMap: Record<string, any> = {};
-
-      ids.forEach((id, idx) => {
-        predMap[id] = predictionsList[idx];
-        srcMap[id] = sourcesList[idx];
-      });
-
-      setPredictionsMap(predMap);
-      setSourcesMap(srcMap);
     } catch (err: any) {
       console.error("Error loading environmental map data:", err);
       setError("Failed to fetch Delhi air quality data. Please check connection and retry.");
@@ -113,6 +93,12 @@ export default function PollutionMap() {
         setSelectedRecommendations(recommend);
         setSelectedForecastData(predictVal);
         setSelectedAttributionData(sourceVal);
+
+        // Also cache into the overlay maps so the "Predicted" / "Dominant Source" map colours
+        // for this ward become accurate once it's been visited, without ever bulk-fetching
+        // all 290 wards at once.
+        setPredictionsMap((prev) => ({ ...prev, [wardId]: predictVal }));
+        setSourcesMap((prev) => ({ ...prev, [wardId]: sourceVal }));
       } catch (err) {
         console.error(`Error loading details for ward ${wardId}:`, err);
       } finally {

@@ -143,7 +143,6 @@ async def save_weather_to_db(
         
         session.add(new_reading)
         await session.commit()
-        await session.refresh(new_reading)
         
         return new_reading
     except SQLAlchemyError as e:
