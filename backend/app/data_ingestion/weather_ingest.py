@@ -3,6 +3,7 @@ Weather ingestion service for the ET AI Hackathon backend.
 Responsible for fetching weather data from Open-Meteo and persisting it to the database.
 """
 
+import json
 from typing import Dict, Any, Optional
 from datetime import datetime, timezone
 import httpx
@@ -11,12 +12,20 @@ from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.models.db_models import WeatherReading
+from app.redis_client import redis_client
 
 # Constants for default location (Delhi)
 # These can be moved to config.py later.
 DEFAULT_LATITUDE = 28.6139
 DEFAULT_LONGITUDE = 77.2090
 OPEN_METEO_URL = "https://api.open-meteo.com/v1/forecast"
+
+# Every ward currently shares the same fixed Delhi coordinates, so a handful of wards being
+# queried in quick succession sends near-identical requests to Open-Meteo — that's what tripped
+# its rate limit (503s) during testing. Caching by location (same TTL Person A already uses for
+# /api/aqi and /api/heatmap) means repeat calls for any ward within the window skip the live
+# fetch entirely, instead of hammering Open-Meteo once per ward.
+WEATHER_CACHE_TTL_SECONDS = 300
 
 
 class WeatherIngestionError(Exception):
@@ -41,18 +50,25 @@ async def fetch_current_weather(
     Raises:
         WeatherIngestionError: If the API request fails or the response is invalid.
     """
+    cache_key = f"weather:current:{round(latitude, 3)}:{round(longitude, 3)}"
+    cached = await redis_client.get(cache_key)
+    if cached:
+        return json.loads(cached)
+
     params = {
         "latitude": latitude,
         "longitude": longitude,
         "current": "temperature_2m,relative_humidity_2m,precipitation,wind_speed_10m,wind_direction_10m"
     }
-    
+
     async with httpx.AsyncClient(timeout=15.0) as client:
         try:
             response = await client.get(OPEN_METEO_URL, params=params)
             response.raise_for_status()
             data = response.json()
-            return data.get("current", {})
+            current = data.get("current", {})
+            await redis_client.setex(cache_key, WEATHER_CACHE_TTL_SECONDS, json.dumps(current))
+            return current
         except httpx.RequestError as e:
             raise WeatherIngestionError(f"Network error while fetching current weather: {e}")
         except httpx.HTTPStatusError as e:
