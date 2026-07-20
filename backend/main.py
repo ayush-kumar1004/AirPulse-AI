@@ -3,18 +3,36 @@
 Shared file: change routing/CORS only by team agreement. Runs clean from commit #1 —
 each router ships mock responses until its owner adds real logic.
 """
-from fastapi import FastAPI
+import logging
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.config import get_settings
 from app.routers import agents, data, forecast, health, sources
+from app.startup import bootstrap_database
 
 settings = get_settings()
+
+logging.basicConfig(level=settings.log_level.upper())
+logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Create the schema and seed wards/industrial zones so a fresh
+    # `docker compose up` works with no manual script runs. Idempotent.
+    await bootstrap_database()
+    yield
+
 
 app = FastAPI(
     title="AirPulse AI API",
     description="AI-Powered Urban Air Quality Intelligence — single-city prototype.",
     version="0.1.0",
+    lifespan=lifespan,
 )
 
 # CORS configured ONCE here. Frontend uses exactly one backend URL.
@@ -25,6 +43,29 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+ALLOWED_ORIGINS = [settings.frontend_origin, "http://localhost:5173"]
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    """Return a real 500 body with CORS headers instead of a bare connection drop.
+
+    Starlette's error middleware sits outside CORSMiddleware, so an unhandled
+    exception produces a response with no Access-Control-Allow-Origin header. The
+    browser then reports a confusing "blocked by CORS policy" error that hides the
+    actual server-side cause. Setting the header here keeps the real error visible.
+    """
+    logger.exception("Unhandled error on %s %s", request.method, request.url.path)
+
+    origin = request.headers.get("origin")
+    headers = {"Access-Control-Allow-Origin": origin} if origin in ALLOWED_ORIGINS else {}
+
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error", "error": str(exc)},
+        headers=headers,
+    )
 
 # One router per owner. Prefixes are the API contract — see README endpoint table.
 app.include_router(health.router)                       # shared

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Sparkles, MapPin, ChevronDown, Check, TrendingUp, TrendingDown, ArrowRight } from "lucide-react";
-import { getPredict } from "../api/client";
+import { getPredict, getWards } from "../api/client";
 
 interface ForecastDataPoint {
   timestamp: string;
@@ -118,13 +118,35 @@ const getCategoryLabel = (aqi: number) => {
 };
 
 export default function ForecastScreen() {
-  const [selectedWardId, setSelectedWardId] = useState<string>("W02");
+  // Empty until /api/wards responds. The ward list used to be a hardcoded
+  // W01/W02/W03 stub, which 500s against the real Delhi dataset ("CANT_1", "NDMC_1", ...).
+  const [selectedWardId, setSelectedWardId] = useState<string>("");
+  const [wardsList, setWardsList] = useState<{ id: string; name: string }[]>([]);
   const [selectedHorizon, setSelectedHorizon] = useState<number>(48);
   const [dropdownOpen, setDropdownOpen] = useState<boolean>(false);
   const [apiData, setApiData] = useState<ForecastDataPoint[] | null>(null);
 
+  // Load the real ward list and select the first one.
+  useEffect(() => {
+    const loadWards = async () => {
+      try {
+        const res = await getWards();
+        const wards = (res?.features ?? []).map((f: any) => ({
+          id: f.properties?.ward_id,
+          name: f.properties?.ward_name ?? f.properties?.ward_id,
+        }));
+        setWardsList(wards);
+        if (wards.length) setSelectedWardId((current) => current || wards[0].id);
+      } catch (err) {
+        console.error("Error loading ward list:", err);
+      }
+    };
+    loadWards();
+  }, []);
+
   // Load predictions in the background
   useEffect(() => {
+    if (!selectedWardId) return;
     const loadPredictions = async () => {
       try {
         const res = await getPredict(selectedWardId, selectedHorizon);
@@ -150,14 +172,8 @@ export default function ForecastScreen() {
 
   const fallback = fallbackDatabase[selectedWardId] || fallbackDatabase.W02;
 
-  // Wards list for dropdown
-  const wardsList = [
-    { id: "W02", name: "Rohini" },
-    { id: "W03", name: "Central" },
-    { id: "W01", name: "Dwarka" },
-  ];
-
-  const activeWardName = wardsList.find((w) => w.id === selectedWardId)?.name || "Rohini";
+  const activeWardName =
+    wardsList.find((w) => w.id === selectedWardId)?.name || "Loading…";
 
   // Dynamic values based on backend API if available, otherwise fallbacks
   const val24 = apiData && apiData.length >= 24 ? apiData[23].predicted_aqi : fallback.h24;
