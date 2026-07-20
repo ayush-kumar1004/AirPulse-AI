@@ -130,7 +130,7 @@ const LYR_LABELS = "wards-labels";
 // ══════════════════════════════════════════════════════════════════════
 const HeatMap = React.memo(function HeatMap({
   onSelectWard,
-  selectedWardId = "W02",
+  selectedWardId = null,
   overlayMode = "current",
   wardsGeoJson,
   heatmapData = [],

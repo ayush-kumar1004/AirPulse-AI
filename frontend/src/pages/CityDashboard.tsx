@@ -36,12 +36,16 @@ export default function CityDashboard() {
     card.style.setProperty("--mouse-y", `${y}px`);
   };
 
-  // 1. Calculate City Average AQI (fallback to 196)
-  const averageAqi = heatmapData && heatmapData.length > 0
-    ? Math.round(heatmapData.reduce((sum, h) => sum + h.aqi, 0) / heatmapData.length)
-    : 196;
+  // Wards with no reading come back as aqi=0 / "Unknown". Counting those as a real
+  // zero would drag the city average down and make the cleanest ward always be a
+  // broken one, so every stat below is computed over reporting wards only.
+  const reportingWards = (heatmapData ?? []).filter(
+    (h) => h.aqi > 0 && h.category?.toLowerCase() !== "unknown"
+  );
+  const hasData = reportingWards.length > 0;
 
-  const getAqiCategory = (aqi: number) => {
+  const getAqiCategory = (aqi: number | null) => {
+    if (aqi === null) return { label: "NO DATA", class: "bg-slate-700/40 text-slate-400 border-slate-600/40" };
     if (aqi <= 50) return { label: "GOOD", class: "bg-green-500/20 text-green-400 border-green-500/30" };
     if (aqi <= 100) return { label: "SATISFACTORY", class: "bg-cyan-500/20 text-cyan-400 border-cyan-500/30" };
     if (aqi <= 150) return { label: "MODERATE", class: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30" };
@@ -49,38 +53,31 @@ export default function CityDashboard() {
     return { label: "SEVERE", class: "bg-red-900/40 text-red-400 border-red-500/30" };
   };
 
+  // 1. City average AQI. No invented number when nothing is reporting.
+  const averageAqi = hasData
+    ? Math.round(reportingWards.reduce((sum, h) => sum + h.aqi, 0) / reportingWards.length)
+    : null;
+
   const avgCategory = getAqiCategory(averageAqi);
 
-  // 2. Worst Ward Details (fallback to Rohini · 241)
-  const worstWard = heatmapData && heatmapData.length > 0
-    ? [...heatmapData].sort((a, b) => b.aqi - a.aqi)[0]
-    : null;
+  // 2. Worst ward
+  const worstWard = hasData ? [...reportingWards].sort((a, b) => b.aqi - a.aqi)[0] : null;
+  const worstWardLabel = worstWard ? `${worstWard.ward_name} · ${worstWard.aqi}` : "—";
+  const worstWardCategory = getAqiCategory(worstWard ? worstWard.aqi : null);
 
-  const worstWardLabel = worstWard
-    ? `${worstWard.ward_name} · ${worstWard.aqi}`
-    : "Rohini · 241";
-  
-  const worstWardCategory = getAqiCategory(worstWard ? worstWard.aqi : 241);
+  // 3. Best ward
+  const bestWard = hasData ? [...reportingWards].sort((a, b) => a.aqi - b.aqi)[0] : null;
+  const bestWardLabel = bestWard ? `${bestWard.ward_name} · ${bestWard.aqi}` : "—";
+  const bestWardCategory = getAqiCategory(bestWard ? bestWard.aqi : null);
 
-  // 3. Best Ward Details (fallback to Vasant Kunj · 88)
-  const bestWard = heatmapData && heatmapData.length > 0
-    ? [...heatmapData].sort((a, b) => a.aqi - b.aqi)[0]
-    : null;
-
-  const bestWardLabel = bestWard
-    ? `${bestWard.ward_name} · ${bestWard.aqi}`
-    : "Vasant Kunj · 88";
-
-  const bestWardCategory = getAqiCategory(bestWard ? bestWard.aqi : 88);
-
-  // 4. Wards in Severe Zone (fallback to 6/24)
-  const totalWardsCount = heatmapData ? heatmapData.length : 24;
-  const severeWardsCount = heatmapData
-    ? heatmapData.filter((h) => h.aqi > 200 || h.category?.toLowerCase() === "severe").length
-    : 6;
+  // 4. Wards in the severe zone, out of the wards actually reporting.
+  const totalWardsCount = reportingWards.length;
+  const severeWardsCount = reportingWards.filter(
+    (h) => h.aqi > 200 || h.category?.toLowerCase() === "severe"
+  ).length;
 
   // Percentage for severe radial circle
-  const severePercent = Math.round((severeWardsCount / totalWardsCount) * 100);
+  const severePercent = hasData ? Math.round((severeWardsCount / totalWardsCount) * 100) : 0;
   const strokeDashArrayValue = `${severePercent}, 100`;
 
   return (
@@ -99,7 +96,7 @@ export default function CityDashboard() {
           >
             <span className="text-[11px] font-bold text-[#bbc9cd] tracking-widest uppercase">City Average AQI</span>
             <div className="flex items-baseline gap-3 mt-4">
-              <span className="text-5xl font-extrabold text-white tracking-tight">{averageAqi}</span>
+              <span className="text-5xl font-extrabold text-white tracking-tight">{averageAqi ?? "—"}</span>
               <span className={`px-2 py-0.5 rounded text-[10px] font-bold border uppercase tracking-wider ${avgCategory.class}`}>
                 {avgCategory.label}
               </span>
@@ -157,7 +154,7 @@ export default function CityDashboard() {
             <span className="text-[11px] font-bold text-[#bbc9cd] tracking-widest uppercase">Wards in Severe Zone</span>
             <div className="flex items-center justify-between mt-4">
               <span className="text-5xl font-extrabold text-white tracking-tight">
-                {severeWardsCount}/{totalWardsCount}
+                {hasData ? `${severeWardsCount}/${totalWardsCount}` : "—"}
               </span>
               <div className="relative w-12 h-12">
                 <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
