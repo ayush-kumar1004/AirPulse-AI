@@ -218,7 +218,7 @@ export default function CityDashboard() {
 
                 {/* Trend line (Solid historical + Dotted forecast) */}
                 <path d="M0,220 Q150,240 300,180 T600,200 T750,150" fill="none" stroke="#22d3ee" strokeWidth="3" />
-                <path d="M750,150 Q850,120 1000,50" fill="none" stroke="#22d3ee" strokeDasharray="8 6" stroke-width="3" />
+                <path d="M750,150 Q850,120 1000,50" fill="none" stroke="#22d3ee" strokeDasharray="8 6" strokeWidth="3" />
               </svg>
 
               {/* Time markers */}

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Sparkles, MapPin, Send, MessageSquare, History, ShieldAlert, Building, HelpCircle, LogOut, ArrowRight } from "lucide-react";
-import { getRecommend, officerChat } from "../api/client";
+import { getRecommend, getWards, officerChat } from "../api/client";
 
 interface ActionRecommendation {
   action: string;
@@ -51,17 +51,25 @@ export default function GovernmentDashboard() {
     }
   }, [messages, chatLoading]);
 
-  // Load recommendations
+  // Ward this dashboard reports on. Resolved from /api/wards rather than hardcoded,
+  // because the real Delhi dataset has no "W02".
+  const [wardId, setWardId] = useState<string | null>(null);
+
+  // Resolve the ward, then load its recommendations.
   useEffect(() => {
-    const loadRecommendations = async () => {
+    const load = async () => {
       try {
-        const res = await getRecommend("W02");
-        setRecommendations(res);
+        const wards = await getWards();
+        const firstWardId = wards?.features?.[0]?.properties?.ward_id;
+        if (!firstWardId) return;
+
+        setWardId(firstWardId);
+        setRecommendations(await getRecommend(firstWardId));
       } catch (err) {
         console.error("Error loading recommendations:", err);
       }
     };
-    loadRecommendations();
+    load();
   }, []);
 
   // Card mouse tracking glow
@@ -87,7 +95,7 @@ export default function GovernmentDashboard() {
     setChatLoading(true);
 
     try {
-      const res = await officerChat({ message: text, ward_id: "W02" });
+      const res = await officerChat({ message: text, ward_id: wardId ?? undefined });
       const aiTimeStr = `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")} • AI Agent`;
 
       const sourcesMapped = res.tools_used?.map((t: string) => {

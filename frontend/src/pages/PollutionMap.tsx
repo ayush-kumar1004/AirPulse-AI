@@ -15,7 +15,11 @@ import WardDrawer from "../components/WardDrawer";
 
 export default function PollutionMap() {
   // Central State Management
-  const [wardId, setWardId] = useState<string | null>("W02");
+  // Starts empty and is set to the first ward the API actually returns. Hardcoding an
+  // id here (it used to be "W02") breaks against the real 290-ward Delhi dataset, whose
+  // ids look like "CANT_1" / "NDMC_1" — every ward-detail call 500s on a ward that
+  // doesn't exist.
+  const [wardId, setWardId] = useState<string | null>(null);
   const [overlayMode, setOverlayMode] = useState<OverlayMode>("current");
 
   // Global Datasets
@@ -52,6 +56,12 @@ export default function PollutionMap() {
 
       setWardsGeoJson(wardsRes);
       setHeatmapData(heatmapRes);
+
+      // Select the first real ward so the detail panel has something valid to show.
+      const firstWardId = wardsRes?.features?.[0]?.properties?.ward_id;
+      if (firstWardId) {
+        setWardId((current) => current ?? firstWardId);
+      }
     } catch (err: any) {
       console.error("Error loading environmental map data:", err);
       setError("Failed to fetch Delhi air quality data. Please check connection and retry.");
