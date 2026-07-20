@@ -55,7 +55,7 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     kimi_api_key: str = ""
     gemini_api_key: str = ""
-    gemini_model: str = "gemini-3.5-flash"
+    gemini_model: str = "gemini-2.5-flash"  # NOTE: "gemini-3.5-flash" does not exist
 
     # CORS
     frontend_origin: str = "http://localhost:5173"
