@@ -6,7 +6,9 @@
       "Bash(pandoc -t markdown \"Team_Build_Plan.docx\")",
       "Bash(pandoc -t markdown \"C:/Users/Ayush PC/Downloads/Team_Build_Plan.docx\" -o \"C:/Users/AYUSHP~1/AppData/Local/Temp/claude/E--ET-Hackathon/48a0fe79-f396-4014-8f95-d2667e24f9c3/scratchpad/plan.md\")",
       "Bash(python -c ' *)",
-      "Bash(python -c \"import json; json.load\\(open\\('app/data/wards.geojson'\\)\\); json.load\\(open\\('app/data/industrial_zones.geojson'\\)\\); print\\('GEOJSON OK'\\)\")"
+      "Bash(python -c \"import json; json.load\\(open\\('app/data/wards.geojson'\\)\\); json.load\\(open\\('app/data/industrial_zones.geojson'\\)\\); print\\('GEOJSON OK'\\)\")",
+      "Bash(npx tsc *)",
+      "Bash(echo \"--- exit: $? ---\")"
     ]
   }
 }

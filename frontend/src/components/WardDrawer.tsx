@@ -46,203 +46,17 @@ interface WardDrawerProps {
   loading: boolean;
 }
 
-// Stitch design fallback database
-const fallbackDatabase: Record<string, {
-  name: string;
-  location: string;
-  aqi: number;
-  category: string;
-  pm25: number;
-  pm10: number;
-  no2: number;
-  temp_c: number;
-  humidity: number;
-  wind_kph: number;
-  wind_dir: string;
-  rain_mm: number;
-  traffic: number;
-  construction: number;
-  industry: number;
-  dust: number;
-  confidence: number;
-  reasoning: string;
-  forecastPoints: { timestamp: string; predicted_aqi: number; trend: string }[];
-}> = {
-  W01: {
-    name: "Dwarka",
-    location: "Sector 10, Delhi SW",
-    aqi: 52,
-    category: "Good",
-    pm25: 12,
-    pm10: 45,
-    no2: 18,
-    temp_c: 32.0,
-    humidity: 62,
-    wind_kph: 12.0,
-    wind_dir: "E",
-    rain_mm: 0.0,
-    traffic: 0.30,
-    construction: 0.20,
-    industry: 0.10,
-    dust: 0.40,
-    confidence: 0.91,
-    reasoning: "Open residential layouts, active green spaces, and low density of heavy industrial units maintain stable particulate dispersion.",
-    forecastPoints: [
-      { timestamp: "Now", predicted_aqi: 52, trend: "stable" },
-      { timestamp: "+4h", predicted_aqi: 55, trend: "stable" },
-      { timestamp: "+8h", predicted_aqi: 58, trend: "stable" },
-      { timestamp: "+12h", predicted_aqi: 50, trend: "stable" },
-      { timestamp: "+16h", predicted_aqi: 48, trend: "stable" },
-      { timestamp: "+20h", predicted_aqi: 52, trend: "stable" },
-      { timestamp: "+24h", predicted_aqi: 54, trend: "stable" },
-    ]
-  },
-  W02: {
-    name: "Rohini",
-    location: "Sector 16, Delhi NW",
-    aqi: 241,
-    category: "Severe",
-    pm25: 145,
-    pm10: 320,
-    no2: 44,
-    temp_c: 34.2,
-    humidity: 41,
-    wind_kph: 8.0,
-    wind_dir: "NW",
-    rain_mm: 0.0,
-    traffic: 0.45,
-    construction: 0.25,
-    industry: 0.20,
-    dust: 0.10,
-    confidence: 0.78,
-    reasoning: "The current spike is driven by stagnant air trapping localized vehicular emissions, combined with bypass exhaust from neighboring freight corridors.",
-    forecastPoints: [
-      { timestamp: "Now", predicted_aqi: 241, trend: "up" },
-      { timestamp: "+4h", predicted_aqi: 248, trend: "up" },
-      { timestamp: "+8h", predicted_aqi: 255, trend: "up" },
-      { timestamp: "+12h", predicted_aqi: 230, trend: "down" },
-      { timestamp: "+16h", predicted_aqi: 210, trend: "down" },
-      { timestamp: "+20h", predicted_aqi: 228, trend: "up" },
-      { timestamp: "+24h", predicted_aqi: 241, trend: "stable" },
-    ]
-  },
-  W03: {
-    name: "Central",
-    location: "Connaught Place, Delhi Central",
-    aqi: 156,
-    category: "Moderate",
-    pm25: 68,
-    pm10: 150,
-    no2: 30,
-    temp_c: 33.5,
-    humidity: 45,
-    wind_kph: 10.0,
-    wind_dir: "W",
-    rain_mm: 0.0,
-    traffic: 0.60,
-    construction: 0.15,
-    industry: 0.10,
-    dust: 0.15,
-    confidence: 0.82,
-    reasoning: "High commercial vehicular transit and street canyons trap tailpipe NO2 and diesel particulates during transit hours.",
-    forecastPoints: [
-      { timestamp: "Now", predicted_aqi: 156, trend: "stable" },
-      { timestamp: "+4h", predicted_aqi: 165, trend: "up" },
-      { timestamp: "+8h", predicted_aqi: 172, trend: "up" },
-      { timestamp: "+12h", predicted_aqi: 148, trend: "down" },
-      { timestamp: "+16h", predicted_aqi: 135, trend: "down" },
-      { timestamp: "+20h", predicted_aqi: 149, trend: "up" },
-      { timestamp: "+24h", predicted_aqi: 156, trend: "stable" },
-    ]
-  },
-  W04: {
-    name: "North Delhi",
-    location: "Model Town, Delhi North",
-    aqi: 88,
-    category: "Moderate",
-    pm25: 28,
-    pm10: 85,
-    no2: 22,
-    temp_c: 31.8,
-    humidity: 50,
-    wind_kph: 9.0,
-    wind_dir: "N",
-    rain_mm: 0.0,
-    traffic: 0.35,
-    construction: 0.15,
-    industry: 0.30,
-    dust: 0.20,
-    confidence: 0.85,
-    reasoning: "Industrial emissions from northern peripheral clusters show mild transport effects under light northerly surface winds.",
-    forecastPoints: [
-      { timestamp: "Now", predicted_aqi: 88, trend: "stable" },
-      { timestamp: "+4h", predicted_aqi: 92, trend: "up" },
-      { timestamp: "+8h", predicted_aqi: 95, trend: "up" },
-      { timestamp: "+12h", predicted_aqi: 84, trend: "down" },
-      { timestamp: "+16h", predicted_aqi: 80, trend: "down" },
-      { timestamp: "+20h", predicted_aqi: 86, trend: "up" },
-      { timestamp: "+24h", predicted_aqi: 88, trend: "stable" },
-    ]
-  },
-  W05: {
-    name: "East Delhi",
-    location: "Laxmi Nagar, Delhi East",
-    aqi: 182,
-    category: "Poor",
-    pm25: 98,
-    pm10: 210,
-    no2: 38,
-    temp_c: 34.0,
-    humidity: 43,
-    wind_kph: 7.0,
-    wind_dir: "NW",
-    rain_mm: 0.0,
-    traffic: 0.40,
-    construction: 0.35,
-    industry: 0.10,
-    dust: 0.15,
-    confidence: 0.80,
-    reasoning: "High residential density, street paving dust resuspension, and nearby highway infrastructure fuel localized fine particulate matter.",
-    forecastPoints: [
-      { timestamp: "Now", predicted_aqi: 182, trend: "up" },
-      { timestamp: "+4h", predicted_aqi: 190, trend: "up" },
-      { timestamp: "+8h", predicted_aqi: 195, trend: "up" },
-      { timestamp: "+12h", predicted_aqi: 170, trend: "down" },
-      { timestamp: "+16h", predicted_aqi: 162, trend: "down" },
-      { timestamp: "+20h", predicted_aqi: 175, trend: "up" },
-      { timestamp: "+24h", predicted_aqi: 182, trend: "stable" },
-    ]
-  },
-  W06: {
-    name: "South Delhi",
-    location: "Greater Kailash, Delhi South",
-    aqi: 110,
-    category: "Moderate",
-    pm25: 38,
-    pm10: 112,
-    no2: 24,
-    temp_c: 32.5,
-    humidity: 55,
-    wind_kph: 11.0,
-    wind_dir: "S",
-    rain_mm: 0.0,
-    traffic: 0.45,
-    construction: 0.15,
-    industry: 0.05,
-    dust: 0.35,
-    confidence: 0.88,
-    reasoning: "Road dust resuspension and high private vehicle use drive moderate daytime PM10 concentration spikes during commute periods.",
-    forecastPoints: [
-      { timestamp: "Now", predicted_aqi: 110, trend: "stable" },
-      { timestamp: "+4h", predicted_aqi: 115, trend: "up" },
-      { timestamp: "+8h", predicted_aqi: 120, trend: "up" },
-      { timestamp: "+12h", predicted_aqi: 105, trend: "down" },
-      { timestamp: "+16h", predicted_aqi: 98, trend: "down" },
-      { timestamp: "+20h", predicted_aqi: 108, trend: "up" },
-      { timestamp: "+24h", predicted_aqi: 110, trend: "stable" },
-    ]
-  }
-};
+// No fake fallback data lives here any more. When an endpoint fails we show "—"
+// and an explicit "unavailable" label, so a broken backend looks broken instead of
+// quietly rendering invented numbers (this component used to show Rohini's AQI of
+// 241 for every ward whose data failed to load).
+const DASH = "—";
+
+const num = (val: number | null | undefined, digits = 0): string =>
+  val === null || val === undefined || Number.isNaN(val) ? DASH : val.toFixed(digits);
+
+const pct = (val: number | null | undefined): string =>
+  val === null || val === undefined || Number.isNaN(val) ? DASH : `${Math.round(val * 100)}%`;
 
 const getCategoryBadgeClass = (category: string) => {
   switch (category?.toLowerCase()) {
@@ -278,39 +92,33 @@ export default function WardDrawer({
     );
   }
 
-  // Retrieve fallback values
-  const fallback = fallbackDatabase[wardId] || fallbackDatabase.W02;
+  // Real values only. Anything the API did not return stays null and renders as "—".
+  const activeName = aqiData?.ward_name ?? wardId;
+  const activeCategory = aqiData?.category ?? "Unavailable";
+  const activeAqi = aqiData?.aqi ?? null;
+  const activePm25 = aqiData?.pm25 ?? null;
+  const activePm10 = aqiData?.pm10 ?? null;
+  const activeNo2 = aqiData?.no2 ?? null;
 
-  // Merge values: API responses overrides Fallbacks
-  const activeName = aqiData ? aqiData.ward_name : fallback.name;
-  const activeLocation = fallback.location;
-  const activeCategory = aqiData ? aqiData.category : fallback.category;
-  const activeAqi = aqiData ? aqiData.aqi : fallback.aqi;
-  const activePm25 = aqiData && aqiData.pm25 !== undefined ? aqiData.pm25 : fallback.pm25;
-  const activePm10 = aqiData && aqiData.pm10 !== undefined ? aqiData.pm10 : fallback.pm10;
-  const activeNo2 = aqiData && aqiData.no2 !== undefined ? aqiData.no2 : fallback.no2;
+  const activeTemp = weatherData?.temp_c ?? null;
+  const activeHumidity = weatherData?.humidity ?? null;
+  const activeWindKph = weatherData?.wind_kph ?? null;
+  const activeWindDir = weatherData?.wind_dir ?? null;
+  const activeRain = weatherData?.rain_mm ?? null;
 
-  const activeTemp = weatherData ? weatherData.temp_c : fallback.temp_c;
-  const activeHumidity = weatherData ? weatherData.humidity : fallback.humidity;
-  const activeWindKph = weatherData ? weatherData.wind_kph : fallback.wind_kph;
-  const activeWindDir = weatherData ? weatherData.wind_dir : fallback.wind_dir;
-  const activeRain = weatherData ? weatherData.rain_mm : fallback.rain_mm;
+  const activeConfidence = attributionData?.confidence ?? null;
+  const activeTraffic = attributionData?.traffic ?? null;
+  const activeConstruction = attributionData?.construction ?? null;
+  const activeIndustry = attributionData?.industry ?? null;
+  const activeDust = attributionData?.dust ?? null;
 
-  const activeReasoning = attributionData ? attributionData.reasoning : fallback.reasoning;
-  const activeConfidence = attributionData ? attributionData.confidence : fallback.confidence;
-  const activeTraffic = attributionData ? attributionData.traffic : fallback.traffic;
-  const activeConstruction = attributionData ? attributionData.construction : fallback.construction;
-  const activeIndustry = attributionData ? attributionData.industry : fallback.industry;
-  const activeDust = attributionData ? attributionData.dust : fallback.dust;
+  const forecastPoints = forecastData?.points ?? [];
+  const hasForecast = forecastPoints.length > 1;
 
-  // Format percentages helper
-  const toPercent = (val: number) => Math.round(val * 100);
-
-  // Generate SVG path for 24h forecast dynamically
+  // Generate SVG path for the 24h forecast. Empty when there is nothing to plot.
   const svgPaths = useMemo(() => {
-    const points = forecastData && forecastData.points && forecastData.points.length > 0 
-      ? forecastData.points 
-      : fallback.forecastPoints;
+    const points = forecastPoints;
+    if (points.length < 2) return { linePath: "", areaPath: "" };
 
     const width = 200;
     const height = 80;
@@ -334,14 +142,14 @@ export default function WardDrawer({
     const areaPath = `${linePath} L${width},${height} L0,${height} Z`;
 
     return { linePath, areaPath };
-  }, [forecastData, fallback]);
+  }, [forecastPoints]);
 
   // Sources breakdown array
   const sources = [
-    { label: "Traffic", val: toPercent(activeTraffic), color: "bg-[#22D3EE]" },
-    { label: "Construction", val: toPercent(activeConstruction), color: "bg-[#22D3EE]/60" },
-    { label: "Industry", val: toPercent(activeIndustry), color: "bg-[#22D3EE]/30" },
-    { label: "Dust", val: toPercent(activeDust), color: "bg-amber-700/50" },
+    { label: "Traffic", val: activeTraffic, color: "bg-[#22D3EE]" },
+    { label: "Construction", val: activeConstruction, color: "bg-[#22D3EE]/60" },
+    { label: "Industry", val: activeIndustry, color: "bg-[#22D3EE]/30" },
+    { label: "Dust", val: activeDust, color: "bg-amber-700/50" },
   ];
 
   return (
@@ -353,7 +161,7 @@ export default function WardDrawer({
             <h2 className="text-2xl font-bold text-white tracking-tight">{activeName}</h2>
             <div className="flex items-center gap-1 text-slate-400 mt-0.5">
               <MapPin className="w-3.5 h-3.5" />
-              <span className="text-xs">{activeLocation}</span>
+              <span className="text-xs">Ward {wardId}</span>
             </div>
           </div>
           <span
@@ -366,9 +174,14 @@ export default function WardDrawer({
         </div>
 
         <div className="flex items-baseline gap-2 mt-4">
-          <span className="text-5xl font-extrabold text-[#22D3EE] tracking-tight">{activeAqi}</span>
+          <span className="text-5xl font-extrabold text-[#22D3EE] tracking-tight">{num(activeAqi)}</span>
           <span className="text-[11px] font-semibold text-slate-400 tracking-wider uppercase">US AQI</span>
         </div>
+        {!aqiData && (
+          <p className="text-[11px] text-amber-400/90">
+            Live air quality data could not be loaded for this ward.
+          </p>
+        )}
       </div>
 
       {/* Pollutant Grid */}
@@ -376,19 +189,19 @@ export default function WardDrawer({
         <div className="bg-slate-800/50 p-2.5 rounded-lg border border-slate-700 text-center">
           <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">PM2.5</p>
           <p className="text-base font-bold text-white mt-0.5">
-            {activePm25}
+            {num(activePm25, 1)}
           </p>
         </div>
         <div className="bg-slate-800/50 p-2.5 rounded-lg border border-slate-700 text-center">
           <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">PM10</p>
           <p className="text-base font-bold text-white mt-0.5">
-            {activePm10}
+            {num(activePm10, 1)}
           </p>
         </div>
         <div className="bg-slate-800/50 p-2.5 rounded-lg border border-slate-700 text-center">
           <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">NO2</p>
           <p className="text-base font-bold text-white mt-0.5">
-            {activeNo2}
+            {num(activeNo2, 1)}
           </p>
         </div>
       </div>
@@ -402,21 +215,21 @@ export default function WardDrawer({
         <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
           <div className="flex justify-between items-center">
             <span className="text-slate-400 text-[10px]">Temperature</span>
-            <span className="font-semibold text-white">{activeTemp}°C</span>
+            <span className="font-semibold text-white">{num(activeTemp, 1)}°C</span>
           </div>
           <div className="flex justify-between items-center">
             <span className="text-slate-400 text-[10px]">Humidity</span>
-            <span className="font-semibold text-white">{activeHumidity}%</span>
+            <span className="font-semibold text-white">{num(activeHumidity)}%</span>
           </div>
           <div className="flex justify-between items-center col-span-2">
             <span className="text-slate-400 text-[10px]">Wind</span>
             <span className="font-semibold text-white">
-              {activeWindKph} kph ({activeWindDir})
+              {num(activeWindKph, 1)} kph ({activeWindDir ?? DASH})
             </span>
           </div>
           <div className="flex justify-between items-center col-span-2">
             <span className="text-slate-400 text-[10px]">Precipitation</span>
-            <span className="font-semibold text-white">{activeRain} mm</span>
+            <span className="font-semibold text-white">{num(activeRain, 1)} mm</span>
           </div>
         </div>
       </div>
@@ -431,22 +244,27 @@ export default function WardDrawer({
 
         {/* Reasoning */}
         <p className="text-xs text-slate-400 leading-relaxed font-light">
-          {activeReasoning}
+          {attributionData
+            ? attributionData.reasoning
+            : "Source analysis is unavailable for this ward right now."}
         </p>
 
         {/* Source Breakdown bars */}
         <div className="space-y-2.5 pt-1.5 border-t border-[#22D3EE]/10">
           <div className="flex justify-between text-[10px] font-bold">
             <span className="text-slate-400">Pollutant Sources</span>
-            <span className="text-[#22D3EE]">{toPercent(activeConfidence)}% Confidence</span>
+            <span className="text-[#22D3EE]">{pct(activeConfidence)} Confidence</span>
           </div>
 
-          {/* Stacked indicator bar */}
+          {/* Stacked indicator bar — stays empty when there is no attribution data */}
           <div className="flex h-2 rounded-full overflow-hidden bg-slate-800 border border-slate-700/50">
-            <div className="bg-[#22D3EE]" style={{ width: `${toPercent(activeTraffic)}%` }} />
-            <div className="bg-[#22D3EE]/60" style={{ width: `${toPercent(activeConstruction)}%` }} />
-            <div className="bg-[#22D3EE]/30" style={{ width: `${toPercent(activeIndustry)}%` }} />
-            <div className="bg-amber-700/50" style={{ width: `${toPercent(activeDust)}%` }} />
+            {sources.map((src, i) => (
+              <div
+                key={i}
+                className={src.color}
+                style={{ width: `${Math.round((src.val ?? 0) * 100)}%` }}
+              />
+            ))}
           </div>
 
           {/* Legend tags with values */}
@@ -455,7 +273,7 @@ export default function WardDrawer({
               <div key={i} className="flex items-center gap-1.5">
                 <span className={`w-1.5 h-1.5 rounded-full ${src.color}`} />
                 <span className="text-[10px] text-slate-400">
-                  {src.label} {src.val}%
+                  {src.label} {pct(src.val)}
                 </span>
               </div>
             ))}
@@ -466,6 +284,11 @@ export default function WardDrawer({
       {/* Forecast (24H Prediction) */}
       <div className="space-y-3">
         <h3 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">24H Prediction</h3>
+        {!hasForecast ? (
+          <div className="h-24 w-full flex items-center justify-center rounded-lg border border-slate-700 bg-slate-800/40">
+            <p className="text-[11px] text-slate-400">Forecast unavailable</p>
+          </div>
+        ) : (
         <div className="h-24 w-full relative">
           <svg className="w-full h-full" viewBox="0 0 200 80">
             <path d={svgPaths.linePath} fill="none" stroke="#22D3EE" strokeWidth="2" />
@@ -483,6 +306,7 @@ export default function WardDrawer({
             <span>+24h</span>
           </div>
         </div>
+        )}
       </div>
 
       {/* CTA Button */}
