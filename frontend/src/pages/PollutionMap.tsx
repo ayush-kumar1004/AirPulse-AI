@@ -4,7 +4,6 @@ import {
   getHeatmap,
   getAQI,
   getWeather,
-  getRecommend,
   getPredict,
   getSourceAttribution,
 } from "../api/client";
@@ -53,7 +52,6 @@ export default function PollutionMap() {
   // Ward-specific Detail Datasets
   const [selectedAqiData, setSelectedAqiData] = useState<any | null>(null);
   const [selectedWeatherData, setSelectedWeatherData] = useState<any | null>(null);
-  const [selectedRecommendations, setSelectedRecommendations] = useState<any | null>(null);
   const [selectedAttributionData, setSelectedAttributionData] = useState<any | null>(null);
   const [selectedForecastData, setSelectedForecastData] = useState<any | null>(null);
 
@@ -102,7 +100,6 @@ export default function PollutionMap() {
     if (!wardId) {
       setSelectedAqiData(null);
       setSelectedWeatherData(null);
-      setSelectedRecommendations(null);
       setSelectedAttributionData(null);
       setSelectedForecastData(null);
       return;
@@ -110,14 +107,17 @@ export default function PollutionMap() {
 
     const fetchWardDetails = async () => {
       setWardLoading(true);
-      // allSettled, not all: these five endpoints fail independently (the LLM
-      // recommendation call has no API key right now, for one), and one failure
-      // must not throw away the four datasets that DID load. With Promise.all a
+      // allSettled, not all: these endpoints fail independently, and one failure
+      // must not throw away the datasets that DID load. With Promise.all a
       // single rejection blanked the entire drawer to "unavailable".
-      const [aqi, weather, recommend, predictVal, sourceVal] = await Promise.allSettled([
+      //
+      // getRecommend is deliberately NOT called here. It runs an LLM, WardDrawer
+      // never rendered its result, and the free Gemini tier allows only 20
+      // requests a day — so every ward click was silently burning quota on a
+      // response that went straight in the bin.
+      const [aqi, weather, predictVal, sourceVal] = await Promise.allSettled([
         getAQI(wardId),
         getWeather(wardId),
-        getRecommend(wardId),
         getPredict(wardId, 24),
         getSourceAttribution(wardId),
       ]).then((results) =>
@@ -132,7 +132,6 @@ export default function PollutionMap() {
 
       setSelectedAqiData(aqi);
       setSelectedWeatherData(adaptWeather(weather));
-      setSelectedRecommendations(recommend);
       setSelectedForecastData(predictVal);
       setSelectedAttributionData(sourceVal);
 
@@ -211,7 +210,6 @@ export default function PollutionMap() {
           wardId={wardId}
           aqiData={selectedAqiData}
           weatherData={selectedWeatherData}
-          recommendations={selectedRecommendations}
           attributionData={selectedAttributionData}
           forecastData={selectedForecastData}
           loading={wardLoading}
