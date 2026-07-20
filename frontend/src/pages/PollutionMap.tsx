@@ -13,6 +13,28 @@ import OverlayToggle, { OverlayMode } from "../components/OverlayToggle";
 import Legend from "../components/Legend";
 import WardDrawer from "../components/WardDrawer";
 
+// Degrees → 16-point compass label ("315" → "NW").
+const toCompass = (deg: number | null | undefined): string | null => {
+  if (deg === null || deg === undefined || Number.isNaN(deg)) return null;
+  const dirs = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"];
+  return dirs[Math.round(((deg % 360) + 360) % 360 / 22.5) % 16];
+};
+
+// The backend's WeatherResponse uses different field names than WardDrawer
+// (temperature/wind_speed/wind_direction/precipitation vs temp_c/wind_kph/
+// wind_dir/rain_mm). Without this mapping every weather field rendered "—"
+// even when the API call succeeded.
+const adaptWeather = (w: any) =>
+  w
+    ? {
+        temp_c: w.temperature ?? null,
+        humidity: w.humidity ?? null,
+        wind_kph: w.wind_speed ?? null,
+        wind_dir: toCompass(w.wind_direction),
+        rain_mm: w.precipitation ?? null,
+      }
+    : null;
+
 export default function PollutionMap() {
   // Central State Management
   // Starts empty and is set to the first ward the API actually returns. Hardcoding an
@@ -87,33 +109,39 @@ export default function PollutionMap() {
     }
 
     const fetchWardDetails = async () => {
-      try {
-        setWardLoading(true);
-        // Load details, weather, recommendations, forecasts, and attributions for the specific ward
-        const [aqi, weather, recommend, predictVal, sourceVal] = await Promise.all([
-          getAQI(wardId),
-          getWeather(wardId),
-          getRecommend(wardId),
-          getPredict(wardId, 24),
-          getSourceAttribution(wardId),
-        ]);
+      setWardLoading(true);
+      // allSettled, not all: these five endpoints fail independently (the LLM
+      // recommendation call has no API key right now, for one), and one failure
+      // must not throw away the four datasets that DID load. With Promise.all a
+      // single rejection blanked the entire drawer to "unavailable".
+      const [aqi, weather, recommend, predictVal, sourceVal] = await Promise.allSettled([
+        getAQI(wardId),
+        getWeather(wardId),
+        getRecommend(wardId),
+        getPredict(wardId, 24),
+        getSourceAttribution(wardId),
+      ]).then((results) =>
+        results.map((r, i) => {
+          if (r.status === "rejected") {
+            console.error(`Ward ${wardId} detail call ${i} failed:`, r.reason);
+            return null;
+          }
+          return r.value;
+        })
+      );
 
-        setSelectedAqiData(aqi);
-        setSelectedWeatherData(weather);
-        setSelectedRecommendations(recommend);
-        setSelectedForecastData(predictVal);
-        setSelectedAttributionData(sourceVal);
+      setSelectedAqiData(aqi);
+      setSelectedWeatherData(adaptWeather(weather));
+      setSelectedRecommendations(recommend);
+      setSelectedForecastData(predictVal);
+      setSelectedAttributionData(sourceVal);
 
-        // Also cache into the overlay maps so the "Predicted" / "Dominant Source" map colours
-        // for this ward become accurate once it's been visited, without ever bulk-fetching
-        // all 290 wards at once.
-        setPredictionsMap((prev) => ({ ...prev, [wardId]: predictVal }));
-        setSourcesMap((prev) => ({ ...prev, [wardId]: sourceVal }));
-      } catch (err) {
-        console.error(`Error loading details for ward ${wardId}:`, err);
-      } finally {
-        setWardLoading(false);
-      }
+      // Also cache into the overlay maps so the "Predicted" / "Dominant Source" map colours
+      // for this ward become accurate once it's been visited, without ever bulk-fetching
+      // all 290 wards at once.
+      if (predictVal) setPredictionsMap((prev) => ({ ...prev, [wardId]: predictVal }));
+      if (sourceVal) setSourcesMap((prev) => ({ ...prev, [wardId]: sourceVal }));
+      setWardLoading(false);
     };
 
     fetchWardDetails();

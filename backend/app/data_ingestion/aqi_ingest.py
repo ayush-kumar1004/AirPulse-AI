@@ -169,30 +169,45 @@ async def get_latest_aqi(
         raise AQIIngestionError(f"Database error while retrieving latest AQI: {e}")
 
 
+# A reading younger than this is served straight from the database. The city-wide
+# refresh loop rewrites every ward every 30 minutes, so under normal operation the
+# live-fetch path below never runs.
+AQI_FRESHNESS = timedelta(minutes=45)
+
+
 async def get_aqi(
     session: AsyncSession,
     ward_id: str,
     city: str = DEFAULT_CITY
 ) -> AQIReading:
     """
-    High-level service function to orchestrate AQI ingestion.
-    
-    Fetches the latest current AQI from OpenAQ, saves it to the database,
-    retrieves the most recently stored record for the ward, and returns it.
-    This acts as the single entrypoint for routers to consume AQI data.
-    
+    High-level service function used by the /api/aqi endpoint.
+
+    Serves the ward's latest database reading when it is fresh. The background
+    refresh loop keeps one per ward, sampled at the ward's own centroid, so this
+    path is both faster and more accurate than fetching live: the live fallback
+    can only sample the city-centre coordinate. It also means a ward click no
+    longer depends on Open-Meteo being reachable at that exact moment — which is
+    what made the ward drawer randomly show "unavailable".
+
     Args:
         session (AsyncSession): The SQLAlchemy async session.
         ward_id (str): The identifier of the ward.
         city (str): Name of the target city.
-        
+
     Returns:
         AQIReading: The latest AQI reading object from the database.
-        
+
     Raises:
         AQIIngestionError: If the process fails at any step.
     """
-    # 1. Fetch the latest AQI from OpenAQ
+    latest = await get_latest_aqi(session, ward_id)
+    if latest is not None:
+        age = datetime.now(timezone.utc) - latest.timestamp
+        if age < AQI_FRESHNESS:
+            return latest
+
+    # Stale or missing — fall back to a live city-centre fetch.
     aqi_data = await fetch_current_aqi(city)
     
     # 2. Use current UTC time as the timestamp since Open-Meteo gives realtime snapshots
