@@ -3,14 +3,17 @@
 Shared file: change routing/CORS only by team agreement. Runs clean from commit #1 —
 each router ships mock responses until its owner adds real logic.
 """
+import asyncio
 import logging
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.config import get_settings
+from app.data_ingestion.aqi_refresh import aqi_refresh_loop
+from app.database import AsyncSessionLocal
 from app.routers import agents, data, forecast, health, sources
 from app.startup import bootstrap_database
 
@@ -20,12 +23,27 @@ logging.basicConfig(level=settings.log_level.upper())
 logger = logging.getLogger(__name__)
 
 
+# How often to re-pull city AQI. Open-Meteo updates hourly, so anything faster
+# just burns requests.
+AQI_REFRESH_SECONDS = 30 * 60
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Create the schema and seed wards/industrial zones so a fresh
+    # Create the schema and seed wards/industrial zones/AQI so a fresh
     # `docker compose up` works with no manual script runs. Idempotent.
     await bootstrap_database()
-    yield
+
+    # Keep AQI current for the whole city while the app runs.
+    refresher = asyncio.create_task(
+        aqi_refresh_loop(AQI_REFRESH_SECONDS, AsyncSessionLocal)
+    )
+    try:
+        yield
+    finally:
+        refresher.cancel()
+        with suppress(asyncio.CancelledError):
+            await refresher
 
 
 app = FastAPI(
