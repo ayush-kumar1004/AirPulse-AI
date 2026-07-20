@@ -20,10 +20,6 @@ interface WardDrawerProps {
     wind_dir: string;
     rain_mm: number;
   } | null;
-  recommendations: {
-    actions: { action: string; target: string; urgency: string; reason: string }[];
-    inspection_priority: { site: string; ward_id: string; reason: string; priority: number }[];
-  } | null;
   attributionData: {
     ward_id: string;
     traffic: number;
