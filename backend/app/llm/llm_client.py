@@ -34,7 +34,7 @@ def get_llm(provider: str = "gemini", temperature: float = 0.0):
             raise ValueError("Gemini API key is not configured. Set GEMINI_API_KEY.")
         from langchain_google_genai import ChatGoogleGenerativeAI
         return ChatGoogleGenerativeAI(
-            model=settings.gemini_model or "gemini-3.5-flash",
+            model=settings.gemini_model or "gemini-2.5-flash",
             google_api_key=gemini_key,
             temperature=temperature,
         )
