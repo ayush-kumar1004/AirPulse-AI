@@ -196,6 +196,17 @@ async def get_latest_weather(
         raise WeatherIngestionError(f"Database error while retrieving latest weather: {e}")
 
 
+async def _latest_weather_any_ward(session: AsyncSession) -> Optional[WeatherReading]:
+    """Newest weather reading regardless of ward — valid city-wide because every
+    ward is currently fetched at the same default coordinate."""
+    try:
+        stmt = select(WeatherReading).order_by(WeatherReading.timestamp.desc()).limit(1)
+        result = await session.execute(stmt)
+        return result.scalars().first()
+    except SQLAlchemyError as e:
+        raise WeatherIngestionError(f"Database error while retrieving fallback weather: {e}")
+
+
 async def get_weather(
     session: AsyncSession,
     ward_id: str,
@@ -221,12 +232,23 @@ async def get_weather(
     Raises:
         WeatherIngestionError: If the process fails at any step.
     """
-    # 1. Fetch the latest weather from Open-Meteo
-    weather_data = await fetch_current_weather(latitude, longitude)
-    
+    # 1. Fetch the latest weather from Open-Meteo. If the live call fails, fall
+    # back to the newest stored reading rather than erroring the whole endpoint:
+    # every ward is fetched at the same city coordinate, so any recent row is the
+    # same measurement this call would have produced.
+    try:
+        weather_data = await fetch_current_weather(latitude, longitude)
+    except WeatherIngestionError:
+        fallback = await get_latest_weather(session, ward_id)
+        if fallback is None:
+            fallback = await _latest_weather_any_ward(session)
+        if fallback is not None:
+            return fallback
+        raise
+
     # Use current timezone-aware UTC time as the timestamp
     timestamp = datetime.now(timezone.utc)
-    
+
     # 2. Save the reading into the database
     await save_weather_to_db(session, ward_id, weather_data, timestamp)
     

@@ -7,9 +7,11 @@ Strictly delegates all business logic and data fetching to the service layer.
 from typing import Optional
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.models.db_models import Ward
 from app.models.schemas import TrafficSignal, ConstructionSignal, WeatherResponse, WardAQI, HeatmapWard, AQIHistoryRecord
 from typing import Any, List
 import json
@@ -131,7 +133,10 @@ async def get_aqi_endpoint(
             return json.loads(cached_data)
             
         reading = await get_aqi(session=session, ward_id=ward_id, city=city)
-        
+
+        # Resolve the real ward name so the UI shows "ROHINI", not "Ward 21".
+        ward_name = await session.scalar(select(Ward.name).where(Ward.id == ward_id))
+
         # Simple AQI categorization logic for the hackathon
         aqi_val = reading.aqi_value
         if aqi_val <= 50:
@@ -149,7 +154,7 @@ async def get_aqi_endpoint(
             
         response_data = WardAQI(
             ward_id=reading.ward_id,
-            ward_name=f"Ward {reading.ward_id}",  # Fallback name since we don't query the ward table here
+            ward_name=ward_name or f"Ward {reading.ward_id}",
             aqi=int(aqi_val),
             category=category,
             pm25=reading.pm25 or 0.0,
