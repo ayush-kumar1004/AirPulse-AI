@@ -7,6 +7,7 @@ yet, falls back to a simple seasonal-persistence formula so the API never breaks
 Updated to match Person A's async DB layer (feat/data-suchit): real AQI/history now comes from
 app.data_ingestion.aqi_ingest (get_aqi, get_aqi_history), both async and needing a DB session.
 """
+import logging
 import math
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -17,11 +18,38 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.data_ingestion.aqi_ingest import get_aqi, get_aqi_history
 
+logger = logging.getLogger(__name__)
+
 try:
     from prophet import Prophet
     PROPHET_AVAILABLE = True
 except ImportError:
     PROPHET_AVAILABLE = False
+
+# Importing Prophet is not the same as being able to use it. In the Docker image it
+# imports fine, then raises at construction:
+#     AttributeError: 'Prophet' object has no attribute 'stan_backend'
+# which is Prophet swallowing a failure to load its compiled Stan model and leaving
+# the attribute unset. The ImportError guard above never fires, so /api/predict
+# returned 500 instead of using the seasonal fallback this module was built to have.
+# Once Prophet fails we record it and stop retrying on every request.
+_prophet_broken = False
+
+
+def _prophet_usable() -> bool:
+    return PROPHET_AVAILABLE and not _prophet_broken
+
+
+def _disable_prophet(exc: Exception, stage: str) -> None:
+    """Log why Prophet failed, once, and fall back to the seasonal model from here on."""
+    global _prophet_broken
+    if not _prophet_broken:
+        _prophet_broken = True
+        logger.error(
+            "Prophet unusable at %s (%s: %s) — serving seasonal-fallback forecasts instead. "
+            "This usually means the compiled Stan model is missing from the installed prophet package.",
+            stage, type(exc).__name__, exc,
+        )
 
 MODELS_DIR = Path(__file__).resolve().parent.parent / "data" / "models"
 MODELS_DIR.mkdir(parents=True, exist_ok=True)
@@ -67,13 +95,17 @@ async def _training_data(session: AsyncSession, ward_id: str) -> tuple[pd.DataFr
 
 async def train(session: AsyncSession, ward_id: str) -> bool:
     """Fit and persist a Prophet model for a ward. Returns whether real data was used.
-    No-op (returns False) if Prophet isn't installed."""
-    if not PROPHET_AVAILABLE:
+    No-op (returns False) if Prophet isn't installed or cannot run."""
+    if not _prophet_usable():
         return False
     df, used_real_data = await _training_data(session, ward_id)
-    model = Prophet(daily_seasonality=True, weekly_seasonality=True, yearly_seasonality=False)
-    model.fit(df)
-    joblib.dump(model, _model_path(ward_id))
+    try:
+        model = Prophet(daily_seasonality=True, weekly_seasonality=True, yearly_seasonality=False)
+        model.fit(df)
+        joblib.dump(model, _model_path(ward_id))
+    except Exception as e:
+        _disable_prophet(e, "training")
+        return False
     return used_real_data
 
 
@@ -101,18 +133,24 @@ async def _fallback_predict(session: AsyncSession, ward_id: str, horizon_hours: 
 
 async def predict(session: AsyncSession, ward_id: str, horizon_hours: int) -> list[dict]:
     """Return [{'timestamp','predicted_aqi','trend','lower','upper'}, ...] for the next horizon_hours."""
-    if not PROPHET_AVAILABLE:
+    if not _prophet_usable():
         return await _fallback_predict(session, ward_id, horizon_hours)
 
     model_path = _model_path(ward_id)
     if not model_path.exists():
         await train(session, ward_id)  # first call for this ward — train once, then reuse the saved model
-    if not model_path.exists():
+    if not model_path.exists() or not _prophet_usable():
         return await _fallback_predict(session, ward_id, horizon_hours)
 
-    model = joblib.load(model_path)
-    future = model.make_future_dataframe(periods=horizon_hours, freq="h", include_history=False)
-    forecast = model.predict(future)
+    try:
+        model = joblib.load(model_path)
+        future = model.make_future_dataframe(periods=horizon_hours, freq="h", include_history=False)
+        forecast = model.predict(future)
+    except Exception as e:
+        # A saved model can still fail to load or run — e.g. a stale pickle after a
+        # dependency upgrade. Never let that 500 the endpoint.
+        _disable_prophet(e, "prediction")
+        return await _fallback_predict(session, ward_id, horizon_hours)
 
     points = []
     prev = None
@@ -131,4 +169,4 @@ async def predict(session: AsyncSession, ward_id: str, horizon_hours: int) -> li
 
 
 def model_name() -> str:
-    return "prophet" if PROPHET_AVAILABLE else "seasonal-fallback"
+    return "prophet" if _prophet_usable() else "seasonal-fallback"
