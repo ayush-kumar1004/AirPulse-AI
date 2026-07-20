@@ -55,7 +55,10 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     kimi_api_key: str = ""
     gemini_api_key: str = ""
-    gemini_model: str = "gemini-2.5-flash"  # NOTE: "gemini-3.5-flash" does not exist
+    # Rolling alias maintained by Google — always points at the current flash
+    # model, so it survives model retirements (2.5-flash 404s for new keys).
+    # llm_client verifies it against ListModels at first use anyway.
+    gemini_model: str = "gemini-flash-latest"
 
     # CORS
     frontend_origin: str = "http://localhost:5173"
