@@ -152,7 +152,7 @@ export default function PollutionMap() {
               <p className="text-sm font-extrabold text-[#F8FAFC]">
                 {wardId && sourcesMap[wardId]?.confidence !== undefined
                   ? `${(sourcesMap[wardId].confidence * 100).toFixed(1)}%`
-                  : "94.2%"}
+                  : "—"}
               </p>
             </div>
           </div>
