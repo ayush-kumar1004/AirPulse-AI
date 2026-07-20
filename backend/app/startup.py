@@ -12,6 +12,7 @@ import logging
 from sqlalchemy import func, select
 
 from app.database import AsyncSessionLocal, Base, engine
+from app.data_ingestion.aqi_refresh import refresh_all_ward_aqi
 from app.data_ingestion.industrial import import_industrial_zones
 from app.data_ingestion.wards import import_wards
 from app.models import db_models  # noqa: F401 — registers every table on Base
@@ -51,6 +52,17 @@ async def seed_industrial_zones() -> None:
         logger.info("Seeded %s industrial zones.", inserted)
 
 
+async def seed_aqi_readings() -> None:
+    """Give every ward a current AQI reading so the heatmap has data to show.
+
+    Without this the map renders flat: /api/heatmap reads `aqi_readings` and never
+    populates it, so every ward reported aqi=0 / "Unknown".
+    """
+    async with AsyncSessionLocal() as session:
+        count = await refresh_all_ward_aqi(session)
+        logger.info("Initial AQI seeded for %s wards.", count)
+
+
 async def bootstrap_database() -> None:
     """Run the full bootstrap.
 
@@ -60,7 +72,7 @@ async def bootstrap_database() -> None:
     """
     await create_tables()
 
-    for step in (seed_wards, seed_industrial_zones):
+    for step in (seed_wards, seed_industrial_zones, seed_aqi_readings):
         try:
             await step()
         except Exception:

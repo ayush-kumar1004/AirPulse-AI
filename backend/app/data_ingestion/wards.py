@@ -120,10 +120,13 @@ async def save_wards_to_db(session: AsyncSession, features: List[Dict[str, Any]]
             ward_id = properties.get("ward_id") or properties.get("id") or str(properties.get("OBJECTID", ""))
             ward_name = properties.get("ward_name") or properties.get("name") or properties.get("W_NAME", f"Unknown Ward {ward_id}")
             
-            if not ward_id or not geometry:
+            # The source GeoJSON carries one junk feature with ward_id "None" and every
+            # name field null. Left in, it becomes an "Unknown Ward None" entry on the
+            # map, so treat a literal "None" as missing.
+            if not ward_id or str(ward_id) == "None" or not geometry:
                 # Skip invalid features silently to continue processing
                 continue
-                
+
             ward_id_str = str(ward_id)
                 
             # Check if the ward already exists to avoid duplicates
