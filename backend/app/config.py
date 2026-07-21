@@ -55,6 +55,10 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     kimi_api_key: str = ""
     gemini_api_key: str = ""
+    # Optional comma-separated pool. Each free Gemini key gets its own daily
+    # allowance, so spreading load across several multiplies the usable budget.
+    # Combined with gemini_api_key; duplicates are dropped.
+    gemini_api_keys: str = ""
     # Rolling alias maintained by Google — always points at the current flash
     # model, so it survives model retirements (2.5-flash 404s for new keys).
     # llm_client verifies it against ListModels at first use anyway.
