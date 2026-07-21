@@ -4,7 +4,7 @@ import logging
 from langchain_core.messages import HumanMessage
 from langgraph.prebuilt import create_react_agent
 
-from app.llm.llm_client import get_llm
+from app.llm.llm_client import run_with_failover
 from app.llm.tools import build_tools
 
 logger = logging.getLogger(__name__)
@@ -25,7 +25,6 @@ QUOTA_HINT = (
 def chat(message: str, ward_id: str | None = None) -> dict:
     """Return {'reply', 'tools_used'} — tool-using answer grounded in live module data."""
     try:
-        llm = get_llm(provider="gemini", temperature=0.0)
         tools = build_tools()
 
         system_prompt = (
@@ -39,19 +38,20 @@ def chat(message: str, ward_id: str | None = None) -> dict:
             "Keep your responses concise, professional, and clear."
         )
 
-        # Build ReAct agent using langgraph prebuilt agent creator
-        agent = create_react_agent(llm, tools, state_modifier=system_prompt)
-
         # Format prompt query with ward_id context if provided
         query = message
         if ward_id:
             query = f"{message} (Context Ward ID: {ward_id})"
 
-        # Invoke agent
-        response = agent.invoke(
-            {"messages": [HumanMessage(content=query)]},
-            config={"recursion_limit": MAX_AGENT_STEPS},
-        )
+        # Build and run the agent against whichever credential still has quota.
+        def run(llm):
+            agent = create_react_agent(llm, tools, state_modifier=system_prompt)
+            return agent.invoke(
+                {"messages": [HumanMessage(content=query)]},
+                config={"recursion_limit": MAX_AGENT_STEPS},
+            )
+
+        response = run_with_failover(run)
 
         # Extract final reply and list of tools used
         messages = response.get("messages", [])

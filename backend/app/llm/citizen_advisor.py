@@ -93,12 +93,11 @@ Output must be in JSON format matching this schema:
 DO NOT include any markdown code blocks, note text, or preamble. Return ONLY raw valid JSON."""
 
     try:
-        llm = get_llm(provider="gemini", temperature=0.0)
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": f"Here is the context data:\n{context_str}"}
         ]
-        response = llm.invoke(messages)
+        response = run_with_failover(lambda llm: llm.invoke(messages))
         content = response.content if hasattr(response, 'content') else str(response)
         parsed = _clean_and_parse_json(content)
 

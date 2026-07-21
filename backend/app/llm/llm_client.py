@@ -1,6 +1,7 @@
 # Person C — thin factory returning a LangChain chat model. Gemini primary, auto-falls back to
 # whichever of Claude/GPT/Kimi actually has a key set.
 import logging
+from datetime import datetime, timedelta, timezone
 
 import httpx
 
@@ -17,6 +18,9 @@ _GEMINI_EXCLUDE = ("image", "tts", "audio", "live", "embedding", "aqa", "gemma",
 
 # Resolved once per process so we don't hit ListModels on every chat message.
 _resolved_gemini_model: str | None = None
+
+# Keys known to be out of quota, mapped to the UTC time their allowance resets.
+_exhausted_until: dict[str, datetime] = {}
 
 
 def _resolve_gemini_model(api_key: str, preferred: str) -> str:
@@ -66,14 +70,93 @@ def _resolve_gemini_model(api_key: str, preferred: str) -> str:
     return pick
 
 
-def get_llm(provider: str = "gemini", temperature: float = 0.0):
+def gemini_keys() -> list[str]:
+    """Every configured Gemini key, in order, without duplicates.
+
+    Reads GEMINI_API_KEY plus the comma-separated GEMINI_API_KEYS pool. Each key
+    carries its own free-tier daily allowance, so N keys give N times the budget.
+    """
+    raw = [settings.gemini_api_key or ""] + (settings.gemini_api_keys or "").split(",")
+    seen, out = set(), []
+    for k in (x.strip() for x in raw):
+        if k and k not in seen:
+            seen.add(k)
+            out.append(k)
+    return out
+
+
+def _is_quota_error(exc: Exception) -> bool:
+    text = str(exc).lower()
+    return "429" in text or "quota" in text or "resourceexhausted" in text or "rate limit" in text
+
+
+def _mark_exhausted(key: str) -> None:
+    """Park a key until the daily quota resets (midnight US Pacific = UTC-8)."""
+    now = datetime.now(timezone.utc)
+    reset = (now + timedelta(days=1)).replace(hour=8, minute=0, second=0, microsecond=0)
+    if reset <= now:
+        reset += timedelta(days=1)
+    _exhausted_until[key] = reset
+    logger.warning(
+        "Gemini key ...%s hit its quota — skipping it until %s UTC.", key[-4:], reset.strftime("%H:%M %d-%b")
+    )
+
+
+def _available_gemini_keys() -> list[str]:
+    now = datetime.now(timezone.utc)
+    return [k for k in gemini_keys() if _exhausted_until.get(k, now) <= now]
+
+
+def run_with_failover(work, temperature: float = 0.0):
+    """Run `work(llm)`, moving to the next credential whenever one is out of quota.
+
+    Tries each Gemini key that is not currently parked, then OpenAI, Claude and
+    Kimi if their keys are set. A key that reports a quota error is parked until
+    the daily reset so later requests skip it immediately instead of spending a
+    call to rediscover it. Non-quota errors are raised straight away — they mean
+    a real bug, and burning the other keys on it would help nobody.
+    """
+    attempts: list[tuple[str, str | None]] = [("gemini", k) for k in _available_gemini_keys()]
+    for name, key in (
+        ("gpt", (settings.openai_api_key or "").strip()),
+        ("claude", (settings.anthropic_api_key or "").strip()),
+        ("kimi", (settings.kimi_api_key or "").strip()),
+    ):
+        if key:
+            attempts.append((name, key))
+
+    if not attempts:
+        raise ValueError(
+            "No LLM credentials configured. Set GEMINI_API_KEY (or GEMINI_API_KEYS / "
+            "OPENAI_API_KEY / ANTHROPIC_API_KEY / KIMI_API_KEY) in backend/.env."
+        )
+
+    last_error: Exception | None = None
+    for provider, key in attempts:
+        try:
+            return work(get_llm(provider=provider, temperature=temperature, api_key=key))
+        except Exception as e:
+            if not _is_quota_error(e):
+                raise
+            last_error = e
+            if provider == "gemini" and key:
+                _mark_exhausted(key)
+            else:
+                logger.warning("%s provider is out of quota — trying the next credential.", provider)
+
+    logger.error("Every configured LLM credential is out of quota.")
+    raise last_error  # type: ignore[misc]
+
+
+def get_llm(provider: str = "gemini", temperature: float = 0.0, api_key: str | None = None):
     """Return a configured LangChain chat model.
     provider: 'gemini' (default) | 'claude' | 'gpt' | 'kimi'
+    api_key: use this specific credential instead of the configured default.
     """
-    gemini_key = (settings.gemini_api_key or "").strip()
-    anthropic_key = (settings.anthropic_api_key or "").strip()
-    openai_key = (settings.openai_api_key or "").strip()
-    kimi_key = (settings.kimi_api_key or "").strip()
+    gemini_key = (api_key if provider == "gemini" and api_key else "") or next(iter(gemini_keys()), "")
+    anthropic_key = (api_key if provider == "claude" and api_key else "") or (settings.anthropic_api_key or "").strip()
+    openai_key = (api_key if provider == "gpt" and api_key else "") or (settings.openai_api_key or "").strip()
+    kimi_key = (api_key if provider == "kimi" and api_key else "") or (settings.kimi_api_key or "").strip()
 
     # Auto-fallback if the requested provider's key is not set.
     if provider == "gemini" and not gemini_key:

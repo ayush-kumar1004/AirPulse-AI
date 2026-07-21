@@ -4,7 +4,7 @@ import logging
 import time
 
 from app.llm.data_bridge import fetch_aqi, fetch_construction, fetch_forecast, fetch_source_attribution, fetch_traffic, fetch_weather
-from app.llm.llm_client import get_llm
+from app.llm.llm_client import run_with_failover
 
 logger = logging.getLogger(__name__)
 
@@ -155,12 +155,11 @@ You MUST respond ONLY with a valid JSON object matching this schema:
 DO NOT include any markdown formatting (like ```json), notes, preamble, or trailing text. The output must be pure raw JSON."""
 
     try:
-        llm = get_llm(provider="gemini", temperature=0.0)
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": f"Here is the context data:\n{context_str}"}
         ]
-        response = llm.invoke(messages)
+        response = run_with_failover(lambda llm: llm.invoke(messages))
         content = response.content if hasattr(response, 'content') else str(response)
         parsed = _clean_and_parse_json(content)
 
