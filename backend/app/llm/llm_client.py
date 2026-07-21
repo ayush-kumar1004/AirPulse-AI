@@ -97,6 +97,11 @@ def get_llm(provider: str = "gemini", temperature: float = 0.0):
             model=_resolve_gemini_model(gemini_key, settings.gemini_model or "gemini-flash-latest"),
             google_api_key=gemini_key,
             temperature=temperature,
+            # Default is 6 retries. Every retry is billed against the free tier's
+            # 20-requests-per-day allowance, and a *daily* quota 429 can never
+            # succeed by retrying — so retries silently multiplied the cost of
+            # each failure until the whole day's budget was gone.
+            max_retries=0,
         )
     elif provider == "claude":
         from langchain_anthropic import ChatAnthropic

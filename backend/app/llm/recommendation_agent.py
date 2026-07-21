@@ -1,11 +1,20 @@
 # Government Action Recommendation agent.
 import json
 import logging
+import time
 
 from app.llm.data_bridge import fetch_aqi, fetch_construction, fetch_forecast, fetch_source_attribution, fetch_traffic, fetch_weather
 from app.llm.llm_client import get_llm
 
 logger = logging.getLogger(__name__)
+
+# The /api/recommend route caches in Redis, but the officer-chat agent calls
+# recommend_actions() directly as a tool and so bypassed that entirely — one
+# chat message could spend several of the free tier's 20 daily requests
+# re-deriving the same ward. This in-process cache sits on the function itself,
+# so every caller benefits.
+_CACHE_SECONDS = 30 * 60
+_cache: dict[str, tuple[float, dict]] = {}
 
 
 def _clean_and_parse_json(text: str) -> dict:
@@ -23,6 +32,16 @@ def _clean_and_parse_json(text: str) -> dict:
 
 def recommend_actions(ward_id: str) -> dict:
     """Return {'ward_id', 'actions': [...], 'inspection_priority': [...]} — prioritised, targeted, time-boxed government actions."""
+    cached = _cache.get(ward_id)
+    if cached and time.monotonic() - cached[0] < _CACHE_SECONDS:
+        return cached[1]
+
+    result = _recommend_actions_uncached(ward_id)
+    _cache[ward_id] = (time.monotonic(), result)
+    return result
+
+
+def _recommend_actions_uncached(ward_id: str) -> dict:
     try:
         # 1. Fetch live metrics from data/ML modules
         aqi_data = fetch_aqi(ward_id)
