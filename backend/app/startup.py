@@ -63,16 +63,50 @@ async def seed_aqi_readings() -> None:
         logger.info("Initial AQI seeded for %s wards.", count)
 
 
+async def ensure_forecasting_model() -> None:
+    """Ensure the LightGBM forecasting model is trained and persisted."""
+    from app.ml.forecast_model import GLOBAL_MODEL_PATH, train
+    if not GLOBAL_MODEL_PATH.exists():
+        logger.info("Forecasting model not found on startup — training LightGBM pipeline on historical data...")
+        await train()
+        logger.info("Forecasting model ready.")
+    else:
+        logger.info("Forecasting model already exists on disk — skipping training.")
+
+
+async def ensure_regulatory_knowledge(sync_to_db: bool = True) -> None:
+    """Ingest and verify statutory regulatory documents (GRAP, CAQM, Air Act) in the vector store."""
+    from app.rag.vector_store import ingest_regulations
+    count = await ingest_regulations(force_refresh=False, sync_to_db=sync_to_db)
+    logger.info("Regulatory vector knowledge store ready (%s chunks).", count)
+
+
 async def bootstrap_database() -> None:
     """Run the full bootstrap.
 
     Seeding failures are logged and swallowed on purpose: a missing GeoJSON file
-    should not stop the API from booting. A failure to create the schema is fatal,
-    because nothing works without it.
+    or offline database should not stop the API from booting. If PostgreSQL is offline,
+    the system operates seamlessly in memory/cache/direct-API mode.
     """
-    await create_tables()
+    try:
+        await create_tables()
+    except Exception as e:
+        logger.warning("Database schema initialization deferred (%s). Operating in direct-telemetry & cache mode.", e)
+        # Skip DB-dependent table seeding steps when PostgreSQL is offline to ensure instant startup
+        try:
+            await ensure_forecasting_model()
+            await ensure_regulatory_knowledge(sync_to_db=False)
+        except Exception:
+            logger.exception("Offline startup steps failed.")
+        return
 
-    for step in (seed_wards, seed_industrial_zones, seed_aqi_readings):
+    for step in (
+        seed_wards,
+        seed_industrial_zones,
+        seed_aqi_readings,
+        ensure_forecasting_model,
+        ensure_regulatory_knowledge,
+    ):
         try:
             await step()
         except Exception:

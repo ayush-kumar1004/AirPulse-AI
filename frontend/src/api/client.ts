@@ -24,6 +24,7 @@ async function post<T>(path: string, body: unknown): Promise<T> {
 // draft) — Person A's real implementation set this, and B/C's endpoints now match for consistency.
 export const getWards = () => get<any>("/api/wards");
 export const getAQI = (wardId: string) => get<any>(`/api/aqi?ward_id=${wardId}`);
+export const getAQIHistory = (wardId: string, days = 1) => get<any[]>(`/api/aqi/history?ward_id=${wardId}&days=${days}`);
 export const getWeather = (wardId: string) => get<any>(`/api/weather?ward_id=${wardId}`);
 export const getHeatmap = () => get<any[]>("/api/heatmap");
 export const getTraffic = (wardId: string) => get<any>(`/api/traffic?ward_id=${wardId}`);
@@ -38,5 +39,7 @@ export const getSourceAttribution = (wardId: string) => get<any>(`/api/source-at
 export const getRecommend = (wardId: string) => get<any>(`/api/recommend?ward_id=${wardId}`);
 export const getAdvisory = (wardId: string, lang = "en", context?: string) =>
   get<any>(`/api/advisory?ward_id=${wardId}&lang=${lang}${context ? `&context=${context}` : ""}`);
-export const officerChat = (body: { message: string; ward_id?: string }) =>
+export const officerChat = (body: { message: string; ward_id?: string; session_id?: string }) =>
   post<any>("/api/chat", body);
+export const getChatHistory = (sessionId: string) =>
+  get<{ session_id: string; messages: any[] }>(`/api/chat/history?session_id=${sessionId}`);

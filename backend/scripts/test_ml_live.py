@@ -26,9 +26,13 @@ async def main(ward_id: str):
         print(json.dumps(breakdown, indent=2, default=str))
 
         print(f"\nFetching 24h forecast for ward '{ward_id}' (model: {model_name()})...")
-        points = await predict(session, ward_id, 24)
+        forecast_res = await predict(session, ward_id, 24)
+        points = forecast_res.get("points", [])
         print(f"Got {len(points)} points. First 3:")
         print(json.dumps(points[:3], indent=2, default=str))
+        print(f"Summary reason: {forecast_res.get('summary_reason')}")
+        print("Top 5 Feature Drivers:")
+        print(json.dumps(forecast_res.get("top_features", []), indent=2, default=str))
 
 
 if __name__ == "__main__":

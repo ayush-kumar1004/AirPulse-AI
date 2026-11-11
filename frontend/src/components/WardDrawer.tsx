@@ -22,6 +22,7 @@ interface WardDrawerProps {
   } | null;
   attributionData: {
     ward_id: string;
+    dominant_source?: string;
     traffic: number;
     construction: number;
     industry: number;
@@ -233,9 +234,16 @@ export default function WardDrawer({
       {/* AI Analysis & Source Attribution */}
       <div className="bg-[#22D3EE]/5 border border-[#22D3EE]/20 rounded-xl p-4 space-y-3.5">
         {/* AI Header */}
-        <div className="flex items-center gap-2 text-[#22D3EE]">
-          <Sparkles className="w-4 h-4" />
-          <span className="text-[11px] font-bold uppercase tracking-wider">AI Source Analysis</span>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 text-[#22D3EE]">
+            <Sparkles className="w-4 h-4" />
+            <span className="text-[11px] font-bold uppercase tracking-wider">AI Source Analysis</span>
+          </div>
+          {attributionData?.dominant_source && (
+            <span className="text-[9px] font-bold uppercase px-2 py-0.5 rounded bg-[#22D3EE]/20 text-[#22D3EE] border border-[#22D3EE]/30">
+              {attributionData.dominant_source} DOMINANT
+            </span>
+          )}
         </div>
 
         {/* Reasoning */}

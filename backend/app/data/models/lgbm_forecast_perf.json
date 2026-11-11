@@ -1,0 +1,17 @@
+{
+  "model_name": "LightGBM Regressor",
+  "status": "HEALTHY",
+  "is_within_tolerance": true,
+  "evaluated_at": "2026-11-10T17:56:32.616752+00:00",
+  "eval_samples": 168,
+  "metrics": {
+    "mae": 0.58,
+    "rmse": 0.75,
+    "mape": 0.29
+  },
+  "thresholds": {
+    "max_tolerated_mae": 35.0,
+    "max_tolerated_rmse": 50.0
+  },
+  "warning": null
+}

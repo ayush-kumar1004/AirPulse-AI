@@ -102,17 +102,28 @@ class ForecastPoint(BaseModel):
     upper: Optional[int] = None
 
 
+class FeatureImportance(BaseModel):
+    feature: str
+    importance: float
+    description: str
+
+
 class ForecastResponse(BaseModel):
-    """GET /api/predict?ward=X — 24/48/72h AQI forecast array."""
+    """GET /api/predict?ward_id=X&horizon=24|48|72 — 24/48/72h AQI forecast array."""
     ward_id: str
     horizon_hours: int       # 24 | 48 | 72
     points: list[ForecastPoint]
-    model: str               # "prophet" | "xgboost" | "mock"
+    model: str               # "LightGBM Regressor (Weather & Lag Tabular)"
+    model_status: Optional[str] = "HEALTHY"
+    warning: Optional[str] = None
+    top_features: list[FeatureImportance] = []
+    summary_reason: Optional[str] = None
 
 
 class SourceBreakdown(BaseModel):
     """GET /api/source-attribution?ward=X — % breakdown by source + confidence + raw factors."""
     ward_id: str
+    dominant_source: Optional[str] = None
     traffic: float           # 0..1 share (all four sum to ~1.0)
     construction: float
     industry: float
@@ -163,6 +174,7 @@ class ChatRequest(BaseModel):
     """POST /api/chat body."""
     message: str
     ward_id: Optional[str] = None
+    session_id: Optional[str] = "default"
 
 
 class ChatResponse(BaseModel):

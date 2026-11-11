@@ -3,7 +3,7 @@ import json
 import logging
 
 from app.llm.data_bridge import fetch_aqi, fetch_forecast, fetch_weather
-from app.llm.llm_client import get_llm
+from app.llm.llm_client import run_with_failover
 
 logger = logging.getLogger(__name__)
 
@@ -29,15 +29,7 @@ def advise(ward_id: str, language: str = "en", profile: str | None = None) -> di
         forecast_points = fetch_forecast(ward_id, 24)
     except Exception as e:
         logger.error(f"Error fetching data for citizen advisor in ward {ward_id}: {e}", exc_info=True)
-        # sensible fallback
-        return {
-            "ward_id": ward_id,
-            "language": language,
-            "aqi": 180,
-            "advice": "Air quality is poor today. Wear an N95 mask outside, keep windows closed, and limit strenuous activities." if language != "hi" else "आज वायु गुणवत्ता खराब है। कृपया बाहर जाते समय N95 मास्क पहनें, खिड़कियां बंद रखें और बाहरी गतिविधियों को सीमित करें।",
-            "best_outdoor_window": "15:00-17:00",
-            "worst_outdoor_window": "07:00-10:00"
-        }
+        raise RuntimeError(f"TelemetryUnavailableError: Unable to fetch live environmental telemetry for ward {ward_id}: {e}")
 
     # Normalize user profile and language name
     user_profile = profile or "general public"

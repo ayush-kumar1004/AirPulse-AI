@@ -59,9 +59,15 @@ async def get_heatmap_endpoint(session: AsyncSession = Depends(get_db)) -> Any:
         cached_data = await redis_client.get(cache_key)
         if cached_data:
             return json.loads(cached_data)
-            
+    except Exception:
+        pass
+
+    try:
         data = await get_heatmap_data(session=session)
-        await redis_client.setex(cache_key, 300, json.dumps([w.model_dump(mode='json') for w in data]))
+        try:
+            await redis_client.setex(cache_key, 300, json.dumps([w.model_dump(mode='json') for w in data]))
+        except Exception:
+            pass
         return data
     except HeatmapError as e:
         raise HTTPException(
@@ -131,11 +137,18 @@ async def get_aqi_endpoint(
         cached_data = await redis_client.get(cache_key)
         if cached_data:
             return json.loads(cached_data)
-            
+    except Exception:
+        pass
+
+    try:
         reading = await get_aqi(session=session, ward_id=ward_id, city=city)
 
         # Resolve the real ward name so the UI shows "ROHINI", not "Ward 21".
-        ward_name = await session.scalar(select(Ward.name).where(Ward.id == ward_id))
+        ward_name = None
+        try:
+            ward_name = await session.scalar(select(Ward.name).where(Ward.id == ward_id))
+        except Exception:
+            pass
 
         # Simple AQI categorization logic for the hackathon
         aqi_val = reading.aqi_value
@@ -163,7 +176,10 @@ async def get_aqi_endpoint(
             updated_at=reading.timestamp
         )
         
-        await redis_client.setex(cache_key, 300, json.dumps(response_data.model_dump(mode='json')))
+        try:
+            await redis_client.setex(cache_key, 300, json.dumps(response_data.model_dump(mode='json')))
+        except Exception:
+            pass
         return response_data
     except AQIIngestionError as e:
         raise HTTPException(

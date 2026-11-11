@@ -14,7 +14,9 @@ venv/
 # ML artifacts
 backend/app/data/*.pkl
 backend/app/data/*.joblib
-backend/app/data/models/
+!backend/app/data/models/
+!backend/app/data/models/*.joblib
+!backend/app/data/models/*.json
 
 # Node / frontend
 node_modules/
@@ -24,6 +26,7 @@ frontend/.vite/
 # Editor / OS
 .vscode/
 .idea/
+.claude/
 .DS_Store
 Thumbs.db
 

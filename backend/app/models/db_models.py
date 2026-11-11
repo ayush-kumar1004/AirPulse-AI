@@ -1,8 +1,13 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Boolean, JSON
+from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Boolean, JSON, Text
 from sqlalchemy.orm import relationship
 from geoalchemy2 import Geometry
 from app.database import Base
 from datetime import datetime, timezone
+
+try:
+    from pgvector.sqlalchemy import Vector
+except ImportError:
+    Vector = None
 
 class Ward(Base):
     """
@@ -103,3 +108,23 @@ class IndustrialZone(Base):
     id = Column(String, primary_key=True, index=True, comment="Unique identifier for the industrial zone")
     name = Column(String, nullable=False, comment="Name of the industrial zone")
     geom = Column(Geometry(geometry_type='POLYGON', srid=4326), nullable=False, comment="Geospatial boundaries of the zone")
+
+
+class RegulationChunk(Base):
+    """
+    RAG storage for Graded Response Action Plan (GRAP), CAQM directions,
+    and statutory environmental acts.
+    """
+    __tablename__ = "regulation_chunks"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    doc_id = Column(String, index=True, nullable=False, comment="Document identifier e.g. 'GRAP-STAGE-III-01'")
+    title = Column(String, nullable=False, comment="Title or formal heading")
+    category = Column(String, index=True, nullable=False, comment="E.g. 'GRAP_STAGE_1', 'GRAP_STAGE_2', 'GRAP_STAGE_3', 'GRAP_STAGE_4', 'AIR_ACT_1981', 'CAQM_DIRECTION'")
+    section = Column(String, nullable=True, comment="Specific Section or action item identifier")
+    content = Column(Text, nullable=False, comment="Full text content of the regulatory chunk")
+    legal_citation = Column(String, nullable=True, comment="Formal legal citation string")
+    metadata_json = Column(JSON, nullable=True, comment="Additional metadata dict")
+    embedding = Column(Vector(768) if Vector is not None else JSON, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+

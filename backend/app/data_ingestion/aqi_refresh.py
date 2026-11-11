@@ -137,7 +137,7 @@ async def aqi_refresh_loop(interval_seconds: int, session_factory) -> None:
                 await refresh_all_ward_aqi(session)
         except asyncio.CancelledError:
             raise
-        except Exception:
-            logger.exception("Scheduled AQI refresh failed — will retry next cycle.")
+        except Exception as e:
+            logger.warning("Scheduled AQI refresh deferred (%s) — database offline. Retrying next cycle.", e)
 
         await asyncio.sleep(interval_seconds)

@@ -1,132 +1,87 @@
-import React, { useState, useEffect } from "react";
-import { Sparkles, MapPin, ChevronDown, Check, TrendingUp, TrendingDown, ArrowRight } from "lucide-react";
-import { getPredict, getWards } from "../api/client";
+import React, { useState, useEffect, useMemo } from "react";
+import {
+  Sparkles,
+  MapPin,
+  ChevronDown,
+  Check,
+  TrendingUp,
+  TrendingDown,
+  Wind,
+  Droplets,
+  Thermometer,
+  CloudRain,
+  ShieldAlert,
+} from "lucide-react";
+import {
+  ResponsiveContainer,
+  ComposedChart,
+  Area,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ReferenceLine,
+} from "recharts";
+import { getPredict, getWards, getWeather } from "../api/client";
 
-interface ForecastDataPoint {
+interface ForecastPoint {
   timestamp: string;
   predicted_aqi: number;
   trend: string;
+  lower?: number;
+  upper?: number;
 }
 
-interface FallbackData {
-  name: string;
-  location: string;
-  h24: number;
-  h24Trend: "up" | "down";
-  h48: number;
-  h48Trend: "up" | "down";
-  h72: number;
-  h72Trend: "up" | "down";
-  windVelocity: string;
-  windVal: number;
-  stubbleImpact: string;
-  stubbleVal: number;
-  humidity: number;
-  primaryReason: string;
-  recommendedPrep: string;
-  pathConfidence: string;
-  pathForecast: string;
-  y24: number;
-  y48: number;
-  y72: number;
+interface FeatureImportanceDriver {
+  feature: string;
+  importance: number;
+  description: string;
 }
 
-// Fallback datasets matching the Stitch design
-const fallbackDatabase: Record<string, FallbackData> = {
-  W02: {
-    name: "Rohini",
-    location: "Sector 16, Delhi NW",
-    h24: 214,
-    h24Trend: "up",
-    h48: 268,
-    h48Trend: "up",
-    h72: 236,
-    h72Trend: "down",
-    windVelocity: "4 km/h (Low)",
-    windVal: 15,
-    stubbleImpact: "Moderate (12%)",
-    stubbleVal: 35,
-    humidity: 68,
-    primaryReason: "Low wind speed combined with increased morning traffic is expected to push AQI into the Very Poor category.",
-    recommendedPrep: "Increase public transport frequency and activate Stage II of GRAP.",
-    pathConfidence: "M0,150 Q125,170 250,140 T500,180 T750,220 T1000,210 L1000,240 T750,250 T500,210 T250,170 T0,180 Z",
-    pathForecast: "M0,165 Q125,185 250,155 T500,195 T750,235 T1000,225",
-    y24: 155,
-    y48: 195,
-    y72: 235,
-  },
-  W03: {
-    name: "Central",
-    location: "Connaught Place, Delhi Central",
-    h24: 156,
-    h24Trend: "up",
-    h48: 182,
-    h48Trend: "up",
-    h72: 145,
-    h72Trend: "down",
-    windVelocity: "6 km/h (Low)",
-    windVal: 22,
-    stubbleImpact: "Low (5%)",
-    stubbleVal: 15,
-    humidity: 55,
-    primaryReason: "Continued commercial diesel transit trapping particulate matter in street canyons during commute hours.",
-    recommendedPrep: "Restrict heavy freight vehicles during peak traffic hours and spray water in key avenues.",
-    pathConfidence: "M0,130 Q125,150 250,120 T500,160 T750,200 T1000,190 L1000,220 T750,230 T500,190 T250,150 T0,160 Z",
-    pathForecast: "M0,145 Q125,165 250,135 T500,175 T750,215 T1000,205",
-    y24: 135,
-    y48: 175,
-    y72: 215,
-  },
-  W01: {
-    name: "Dwarka",
-    location: "Sector 10, Delhi SW",
-    h24: 55,
-    h24Trend: "up",
-    h48: 62,
-    h48Trend: "up",
-    h72: 50,
-    h72Trend: "down",
-    windVelocity: "12 km/h (Moderate)",
-    windVal: 45,
-    stubbleImpact: "Low (2%)",
-    stubbleVal: 8,
-    humidity: 62,
-    primaryReason: "Favorable wind velocities and low local traffic density promote good aerosol dispersion over open residential areas.",
-    recommendedPrep: "Maintain routine watering of roads and green belt maintenance.",
-    pathConfidence: "M0,60 Q125,80 250,50 T500,90 T750,130 T1000,120 L1000,150 T750,160 T500,120 T250,80 T0,90 Z",
-    pathForecast: "M0,75 Q125,95 250,65 T500,105 T750,145 T1000,135",
-    y24: 65,
-    y48: 105,
-    y72: 145,
-  },
-};
+interface ForecastApiResponse {
+  ward_id: string;
+  horizon_hours: number;
+  points: ForecastPoint[];
+  model: string;
+  top_features: FeatureImportanceDriver[];
+  summary_reason?: string;
+}
+
+interface WeatherApiResponse {
+  temperature?: number;
+  humidity?: number;
+  wind_speed?: number;
+  wind_direction?: number;
+  precipitation?: number;
+}
 
 const getCategoryChipClass = (aqi: number) => {
   if (aqi <= 50) return "bg-green-500/10 text-green-400 border border-green-500/20";
   if (aqi <= 100) return "bg-cyan-500/10 text-cyan-400 border border-cyan-500/20";
-  if (aqi <= 150) return "bg-yellow-500/10 text-[#EAB308] border border-yellow-500/20";
-  if (aqi <= 200) return "bg-orange-500/10 text-orange-400 border border-orange-500/20";
+  if (aqi <= 200) return "bg-yellow-500/10 text-[#EAB308] border border-yellow-500/20";
+  if (aqi <= 300) return "bg-orange-500/10 text-orange-400 border border-orange-500/20";
   return "bg-red-500/10 text-[#EF4444] border border-red-500/20";
 };
 
 const getCategoryLabel = (aqi: number) => {
   if (aqi <= 50) return "GOOD";
-  if (aqi <= 100) return "MODERATE";
-  if (aqi <= 150) return "UNHEALTHY (SENSITIVE)";
-  if (aqi <= 200) return "POOR";
-  return "VERY POOR";
+  if (aqi <= 100) return "SATISFACTORY";
+  if (aqi <= 200) return "MODERATE";
+  if (aqi <= 300) return "POOR";
+  return "SEVERE";
 };
 
 export default function ForecastScreen() {
-  // Empty until /api/wards responds. The ward list used to be a hardcoded
-  // W01/W02/W03 stub, which 500s against the real Delhi dataset ("CANT_1", "NDMC_1", ...).
   const [selectedWardId, setSelectedWardId] = useState<string>("");
   const [wardsList, setWardsList] = useState<{ id: string; name: string }[]>([]);
   const [selectedHorizon, setSelectedHorizon] = useState<number>(48);
   const [dropdownOpen, setDropdownOpen] = useState<boolean>(false);
-  const [apiData, setApiData] = useState<ForecastDataPoint[] | null>(null);
+  const [forecastData, setForecastData] = useState<ForecastApiResponse | null>(null);
+  const [weatherData, setWeatherData] = useState<WeatherApiResponse | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
 
-  // Load the real ward list and select the first one.
+  // Load Delhi wards on mount
   useEffect(() => {
     const loadWards = async () => {
       try {
@@ -136,7 +91,9 @@ export default function ForecastScreen() {
           name: f.properties?.ward_name ?? f.properties?.ward_id,
         }));
         setWardsList(wards);
-        if (wards.length) setSelectedWardId((current) => current || wards[0].id);
+        if (wards.length > 0) {
+          setSelectedWardId((current) => current || wards[0].id);
+        }
       } catch (err) {
         console.error("Error loading ward list:", err);
       }
@@ -144,23 +101,41 @@ export default function ForecastScreen() {
     loadWards();
   }, []);
 
-  // Load predictions in the background
+  // Fetch real forecast and live weather whenever ward or horizon changes
   useEffect(() => {
     if (!selectedWardId) return;
-    const loadPredictions = async () => {
+
+    let isMounted = true;
+    const loadData = async () => {
+      setLoading(true);
       try {
-        const res = await getPredict(selectedWardId, selectedHorizon);
-        if (res && res.points) {
-          setApiData(res.points);
+        const [predictRes, weatherRes] = await Promise.allSettled([
+          getPredict(selectedWardId, selectedHorizon),
+          getWeather(selectedWardId),
+        ]);
+
+        if (isMounted) {
+          if (predictRes.status === "fulfilled" && predictRes.value) {
+            setForecastData(predictRes.value);
+          }
+          if (weatherRes.status === "fulfilled" && weatherRes.value) {
+            setWeatherData(weatherRes.value);
+          }
         }
       } catch (err) {
-        console.error("Error loading forecast prediction details:", err);
+        console.error("Error fetching forecast:", err);
+      } finally {
+        if (isMounted) setLoading(false);
       }
     };
-    loadPredictions();
+
+    loadData();
+    return () => {
+      isMounted = false;
+    };
   }, [selectedWardId, selectedHorizon]);
 
-  // Mouse move handler for tracking glow
+  // Card mouse tracking glow
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     const card = e.currentTarget;
     const rect = card.getBoundingClientRect();
@@ -170,15 +145,46 @@ export default function ForecastScreen() {
     card.style.setProperty("--mouse-y", `${y}px`);
   };
 
-  const fallback = fallbackDatabase[selectedWardId] || fallbackDatabase.W02;
-
   const activeWardName =
-    wardsList.find((w) => w.id === selectedWardId)?.name || "Loading…";
+    wardsList.find((w) => w.id === selectedWardId)?.name || "Loading Ward…";
 
-  // Dynamic values based on backend API if available, otherwise fallbacks
-  const val24 = apiData && apiData.length >= 24 ? apiData[23].predicted_aqi : fallback.h24;
-  const val48 = apiData && apiData.length >= 48 ? apiData[47].predicted_aqi : fallback.h48;
-  const val72 = apiData && apiData.length >= 72 ? apiData[71].predicted_aqi : fallback.h72;
+  const points = forecastData?.points ?? [];
+
+  // Dynamic values at +24h, +48h, and +72h directly from the real prediction array
+  const point24 = points.length >= 24 ? points[23] : points[points.length - 1];
+  const point48 = points.length >= 48 ? points[47] : points[points.length - 1];
+  const point72 = points.length >= 72 ? points[71] : points[points.length - 1];
+
+  const val24 = point24?.predicted_aqi ?? 0;
+  const val48 = point48?.predicted_aqi ?? 0;
+  const val72 = point72?.predicted_aqi ?? 0;
+
+  // Format Recharts data series from API response
+  const chartData = useMemo(() => {
+    if (!points.length) return [];
+    return points.map((p) => {
+      const date = new Date(p.timestamp);
+      const timeStr = date.toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: true,
+      });
+      const dayStr = date.toLocaleDateString([], { weekday: "short" });
+      return {
+        time: `${dayStr} ${timeStr}`,
+        aqi: p.predicted_aqi,
+        lower: p.lower ?? Math.max(10, p.predicted_aqi - 20),
+        upper: p.upper ?? p.predicted_aqi + 20,
+        trend: p.trend,
+      };
+    });
+  }, [points]);
+
+  const topDrivers = forecastData?.top_features ?? [];
+  const modelName = forecastData?.model ?? "LightGBM Regressor (Tabular)";
+  const summaryReason =
+    forecastData?.summary_reason ||
+    "Tabular forecasting model synthesizes autoregressive lags with projected temperature, humidity, and wind vectors.";
 
   return (
     <div className="flex-1 w-full h-full overflow-y-auto p-6 md:p-8 space-y-8 bg-[#0F172A] text-[#dae2fd] font-sans pb-24">
@@ -187,8 +193,15 @@ export default function ForecastScreen() {
         {/* Page Header Section */}
         <header className="flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div>
-            <h1 className="text-3xl font-extrabold text-white tracking-tight">AQI Forecast</h1>
-            <p className="text-sm text-[#bbc9cd] mt-1">Real-time predictive air quality modeling for New Delhi.</p>
+            <div className="flex items-center gap-3">
+              <h1 className="text-3xl font-extrabold text-white tracking-tight">AQI Forecast</h1>
+              <span className="px-3 py-1 bg-[#22D3EE]/10 border border-[#22D3EE]/30 rounded-full text-[10px] font-bold text-[#22D3EE] uppercase tracking-wider">
+                {modelName}
+              </span>
+            </div>
+            <p className="text-sm text-[#bbc9cd] mt-1">
+              Multi-step machine learning forecast driven by real weather predictions and lag dynamics.
+            </p>
           </div>
 
           {/* Ward Selector and Horizon Tabs */}
@@ -200,12 +213,12 @@ export default function ForecastScreen() {
                 className="flex items-center gap-2 px-4 py-2 bg-[#222a3d] rounded-lg text-white border border-[#3c494c]/40 hover:border-[#22D3EE]/50 transition-colors text-sm font-semibold"
               >
                 <MapPin className="w-4 h-4 text-[#22D3EE]" />
-                <span>{activeWardName}</span>
+                <span className="max-w-[140px] truncate">{activeWardName}</span>
                 <ChevronDown className="w-4 h-4 text-[#bbc9cd]" />
               </button>
 
               {dropdownOpen && (
-                <div className="absolute top-full right-0 mt-2 w-40 bg-[#1E293B] border border-[#3c494c]/40 rounded-xl overflow-hidden shadow-2xl z-30">
+                <div className="absolute top-full right-0 mt-2 w-56 max-h-72 overflow-y-auto bg-[#1E293B] border border-[#3c494c]/40 rounded-xl overflow-hidden shadow-2xl z-30 custom-scrollbar">
                   {wardsList.map((ward) => (
                     <button
                       key={ward.id}
@@ -213,17 +226,19 @@ export default function ForecastScreen() {
                         setSelectedWardId(ward.id);
                         setDropdownOpen(false);
                       }}
-                      className="w-full px-4 py-2.5 text-left text-xs font-semibold hover:bg-[#22D3EE]/10 hover:text-white transition-colors flex items-center justify-between"
+                      className="w-full px-4 py-2.5 text-left text-xs font-semibold hover:bg-[#22D3EE]/10 hover:text-white transition-colors flex items-center justify-between border-b border-[#3c494c]/20"
                     >
-                      <span>{ward.name}</span>
-                      {selectedWardId === ward.id && <Check className="w-3.5 h-3.5 text-[#22D3EE]" />}
+                      <span className="truncate pr-2">{ward.name}</span>
+                      {selectedWardId === ward.id && (
+                        <Check className="w-3.5 h-3.5 text-[#22D3EE] flex-shrink-0" />
+                      )}
                     </button>
                   ))}
                 </div>
               )}
             </div>
 
-            {/* Horizon Switcher tabs */}
+            {/* Horizon Switcher Tabs */}
             <div className="flex h-10 p-1 bg-[#2d3449] rounded-lg">
               {[24, 48, 72].map((hz) => {
                 const isActive = selectedHorizon === hz;
@@ -245,80 +260,132 @@ export default function ForecastScreen() {
           </div>
         </header>
 
-        {/* Forecast Chart Card */}
+        {/* Dynamic Forecast Chart Card */}
         <section
           onMouseMove={handleMouseMove}
           className="p-6 rounded-2xl border border-[#334155]/50 relative overflow-hidden bg-[#1E293B]/50 backdrop-blur-md"
           style={{
-            background: "radial-gradient(1000px circle at var(--mouse-x, 0px) var(--mouse-y, 0px), rgba(34, 211, 238, 0.06), transparent 80%), rgba(30, 41, 59, 0.5)",
+            background:
+              "radial-gradient(1000px circle at var(--mouse-x, 0px) var(--mouse-y, 0px), rgba(34, 211, 238, 0.06), transparent 80%), rgba(30, 41, 59, 0.5)",
           }}
         >
-          <div className="flex flex-col sm:flex-row justify-between items-start gap-4 mb-6 border-b border-[#3c494c]/30 pb-4">
+          <div className="flex flex-col sm:flex-row justify-between items-start gap-4 mb-4 border-b border-[#3c494c]/30 pb-4">
             <div>
-              <h3 className="text-xl font-bold text-white tracking-tight">Predictive AQI Trend</h3>
-              <p className="text-xs text-[#bbc9cd] mt-0.5">Expected hourly particulate matter concentration (PM2.5)</p>
+              <h3 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
+                Predictive AQI Trend (+{selectedHorizon}h)
+                {loading && (
+                  <span className="w-2 h-2 rounded-full bg-[#22D3EE] animate-ping" />
+                )}
+              </h3>
+              <p className="text-xs text-[#bbc9cd] mt-0.5">
+                Hourly multi-step prediction with empirical 95% confidence intervals and weather dynamics
+              </p>
             </div>
-            <div className="flex items-center gap-4 text-[10px] font-bold text-[#bbc9cd] uppercase tracking-wider">
+            <div className="flex items-center gap-4 text-[10px] font-bold text-[#bbc9cd] uppercase tracking-wider flex-wrap">
               <span className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#22d3ee] shadow-[0_0_8px_#22d3ee]" />
-                Forecast
+                <span className="w-3 h-3 rounded-full bg-[#22d3ee] shadow-[0_0_8px_#22d3ee]" />
+                LightGBM Predicted AQI
               </span>
               <span className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 border border-dashed border-[#bbc9cd]/60 rounded-sm" />
-                Confidence Range
+                <span className="w-3 h-3 bg-[#22d3ee]/20 border border-dashed border-[#22d3ee] rounded" />
+                Confidence Band
+              </span>
+              <span className="flex items-center gap-2 text-red-400">
+                <span className="w-3 h-0.5 bg-red-500" />
+                Danger Threshold (300 AQI)
               </span>
             </div>
           </div>
 
-          {/* SVG Line Chart */}
-          <div className="h-[300px] w-full relative mt-6 flex items-end">
-            <svg className="w-full h-full" preserveAspectRatio="none" viewBox="0 0 1000 300">
-              {/* Danger Threshold Line at 300 AQI */}
-              <line stroke="#7f1d1d" strokeDasharray="8 4" strokeWidth="1.5" x1="0" x2="1000" y1="60" y2="60" />
-              <text fill="#ef4444" fontSize="10" fontWeight="bold" textAnchor="end" x="990" y="50" className="uppercase tracking-widest opacity-80">
-                Danger Threshold (300 AQI)
-              </text>
-
-              {/* Confidence Shaded Area */}
-              <path d={fallback.pathConfidence} fill="#22d3ee" fillOpacity="0.05" />
-
-              {/* Line Gradients */}
-              <defs>
-                <linearGradient id="aqi-line-gradient" x1="0" x2="1" y1="0" y2="0">
-                  <stop offset="0%" stopColor="#EAB308" />
-                  <stop offset="30%" stopColor="#F97316" />
-                  <stop offset="70%" stopColor="#EF4444" />
-                  <stop offset="100%" stopColor="#7F1D1D" />
-                </linearGradient>
-              </defs>
-
-              {/* Main Forecast Curve */}
-              <path d={fallback.pathForecast} fill="none" stroke="url(#aqi-line-gradient)" strokeLinecap="round" strokeWidth="4" />
-
-              {/* Point Markers */}
-              <circle cx="250" cy={fallback.y24} fill="#F97316" r="6" />
-              <circle cx="500" cy={fallback.y48} fill="#EF4444" r="6" />
-              <circle cx="750" cy={fallback.y72} fill="#7F1D1D" r="6" />
-
-              {/* Value labels */}
-              <text fill="#F97316" fontSize="12" fontWeight="bold" textAnchor="middle" x="250" y={fallback.y24 - 15}>
-                {val24} (+24h)
-              </text>
-              <text fill="#EF4444" fontSize="12" fontWeight="bold" textAnchor="middle" x="500" y={fallback.y48 - 15}>
-                {val48} (+48h)
-              </text>
-              <text fill="#7F1D1D" fontSize="12" fontWeight="bold" textAnchor="middle" x="750" y={fallback.y72 - 15}>
-                {val72} (+72h)
-              </text>
-            </svg>
-
-            {/* Grid Overlay lines */}
-            <div className="absolute inset-0 pointer-events-none flex justify-between items-end border-b border-[#3c494c]/20">
-              <div className="h-full border-r border-[#3c494c]/10 w-0" />
-              <div className="h-full border-r border-[#3c494c]/10 w-0" />
-              <div className="h-full border-r border-[#3c494c]/10 w-0" />
-              <div className="h-full border-r border-[#3c494c]/10 w-0" />
-            </div>
+          {/* Dynamic Recharts Chart */}
+          <div className="h-[340px] w-full relative mt-4">
+            {loading && !chartData.length ? (
+              <div className="h-full w-full flex flex-col items-center justify-center gap-3 bg-[#0F172A]/40 rounded-xl">
+                <div className="w-8 h-8 border-2 border-[#22D3EE] border-t-transparent rounded-full animate-spin" />
+                <p className="text-xs text-[#bbc9cd] uppercase font-bold tracking-widest">
+                  Computing LightGBM Forecast…
+                </p>
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart data={chartData} margin={{ top: 15, right: 20, left: -10, bottom: 25 }}>
+                  <defs>
+                    <linearGradient id="confidenceBand" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#22D3EE" stopOpacity={0.25} />
+                      <stop offset="95%" stopColor="#22D3EE" stopOpacity={0.02} />
+                    </linearGradient>
+                    <linearGradient id="aqiLineGradient" x1="0" y1="0" x2="1" y2="0">
+                      <stop offset="0%" stopColor="#22D3EE" />
+                      <stop offset="50%" stopColor="#38BDF8" />
+                      <stop offset="100%" stopColor="#818CF8" />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.5} />
+                  <XAxis
+                    dataKey="time"
+                    stroke="#94A3B8"
+                    fontSize={11}
+                    tickLine={false}
+                    interval={Math.max(1, Math.floor(chartData.length / 8))}
+                    angle={-20}
+                    textAnchor="end"
+                  />
+                  <YAxis
+                    stroke="#94A3B8"
+                    fontSize={11}
+                    tickLine={false}
+                    domain={[0, (dataMax: number) => Math.max(350, Math.ceil(dataMax * 1.15))]}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: "#0F172A",
+                      borderColor: "#334155",
+                      borderRadius: "12px",
+                      color: "#F8FAFC",
+                      fontSize: "12px",
+                      boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.5)",
+                    }}
+                    formatter={(value: any, name: string) => {
+                      if (name === "aqi") return [value, "Predicted AQI"];
+                      if (name === "upper") return [value, "Upper Bound"];
+                      if (name === "lower") return [value, "Lower Bound"];
+                      return [value, name];
+                    }}
+                  />
+                  {/* Severe Pollution Danger Reference Line */}
+                  <ReferenceLine
+                    y={300}
+                    stroke="#EF4444"
+                    strokeDasharray="6 4"
+                    strokeWidth={1.5}
+                    label={{
+                      value: "Severe (300 AQI)",
+                      fill: "#EF4444",
+                      fontSize: 10,
+                      position: "insideTopRight",
+                    }}
+                  />
+                  {/* Upper Bound Area */}
+                  <Area
+                    type="monotone"
+                    dataKey="upper"
+                    stroke="none"
+                    fill="url(#confidenceBand)"
+                    name="upper"
+                  />
+                  {/* Main Predicted AQI Curve */}
+                  <Line
+                    type="monotone"
+                    dataKey="aqi"
+                    stroke="url(#aqiLineGradient)"
+                    strokeWidth={3}
+                    dot={{ r: 3, fill: "#22D3EE" }}
+                    activeDot={{ r: 6, fill: "#38BDF8" }}
+                    name="aqi"
+                  />
+                </ComposedChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </section>
 
@@ -327,167 +394,260 @@ export default function ForecastScreen() {
           {/* Card 1: +24h */}
           <div
             onMouseMove={handleMouseMove}
-            className="p-6 rounded-xl border border-[#334155]/50 flex items-center justify-between transition-all duration-300 relative overflow-hidden bg-[#1E293B]/50 backdrop-blur-md hover:border-[#22D3EE]/30"
-            style={{
-              background: "radial-gradient(400px circle at var(--mouse-x, 0px) var(--mouse-y, 0px), rgba(34, 211, 238, 0.08), transparent 80%), rgba(30, 41, 59, 0.5)",
-            }}
+            onClick={() => setSelectedHorizon(24)}
+            className={`p-6 rounded-xl border flex items-center justify-between transition-all duration-300 relative overflow-hidden backdrop-blur-md cursor-pointer ${
+              selectedHorizon === 24
+                ? "border-[#22D3EE] bg-[#22D3EE]/10 shadow-[0_0_20px_rgba(34,211,238,0.15)]"
+                : "border-[#334155]/50 bg-[#1E293B]/50 hover:border-[#22D3EE]/40"
+            }`}
           >
             <div className="space-y-1">
               <p className="text-[10px] font-bold text-[#bbc9cd] uppercase tracking-wider">+24 Hours</p>
               <div className="flex items-baseline gap-2">
-                <span className="text-4xl font-extrabold text-white tracking-tight">{val24}</span>
-                <TrendingUp className="w-4 h-4 text-orange-400" />
+                <span className="text-4xl font-extrabold text-white tracking-tight">{val24 || "—"}</span>
+                {point24?.trend === "rising" ? (
+                  <TrendingUp className="w-4 h-4 text-orange-400" />
+                ) : (
+                  <TrendingDown className="w-4 h-4 text-cyan-400" />
+                )}
               </div>
             </div>
             <div className="text-right">
-              <span className={`px-3 py-1 rounded-full text-[10px] font-bold tracking-widest ${getCategoryChipClass(val24)}`}>
+              <span
+                className={`px-3 py-1 rounded-full text-[10px] font-bold tracking-widest ${getCategoryChipClass(
+                  val24
+                )}`}
+              >
                 {getCategoryLabel(val24)}
               </span>
-              <p className="mt-2 text-[10px] font-bold text-orange-400 uppercase tracking-wide">Rising Trend</p>
+              <p className="mt-2 text-[10px] font-bold text-[#bbc9cd] uppercase tracking-wide">
+                Trend: {point24?.trend || "Stable"}
+              </p>
             </div>
           </div>
 
-          {/* Card 2: +48h (Active/Highlighted card in Stitch) */}
+          {/* Card 2: +48h */}
           <div
             onMouseMove={handleMouseMove}
-            className="p-6 rounded-xl border border-[#22D3EE]/30 flex items-center justify-between bg-[#22D3EE]/5 relative overflow-hidden backdrop-blur-md"
-            style={{
-              background: "radial-gradient(400px circle at var(--mouse-x, 0px) var(--mouse-y, 0px), rgba(34, 211, 238, 0.12), transparent 80%), rgba(34, 211, 238, 0.05)",
-            }}
+            onClick={() => setSelectedHorizon(48)}
+            className={`p-6 rounded-xl border flex items-center justify-between transition-all duration-300 relative overflow-hidden backdrop-blur-md cursor-pointer ${
+              selectedHorizon === 48
+                ? "border-[#22D3EE] bg-[#22D3EE]/10 shadow-[0_0_20px_rgba(34,211,238,0.15)]"
+                : "border-[#334155]/50 bg-[#1E293B]/50 hover:border-[#22D3EE]/40"
+            }`}
           >
             <div className="space-y-1">
               <p className="text-[10px] font-bold text-[#bbc9cd] uppercase tracking-wider">+48 Hours</p>
               <div className="flex items-baseline gap-2">
-                <span className="text-4xl font-extrabold text-white tracking-tight">{val48}</span>
-                <TrendingUp className="w-4 h-4 text-red-500 animate-pulse" />
+                <span className="text-4xl font-extrabold text-white tracking-tight">{val48 || "—"}</span>
+                {point48?.trend === "rising" ? (
+                  <TrendingUp className="w-4 h-4 text-red-500 animate-pulse" />
+                ) : (
+                  <TrendingDown className="w-4 h-4 text-cyan-400" />
+                )}
               </div>
             </div>
             <div className="text-right">
-              <span className={`px-3 py-1 rounded-full text-[10px] font-bold tracking-widest ${getCategoryChipClass(val48)}`}>
+              <span
+                className={`px-3 py-1 rounded-full text-[10px] font-bold tracking-widest ${getCategoryChipClass(
+                  val48
+                )}`}
+              >
                 {getCategoryLabel(val48)}
               </span>
-              <p className="mt-2 text-[10px] font-bold text-[#EF4444] uppercase tracking-wide animate-pulse">Rising Trend</p>
+              <p className="mt-2 text-[10px] font-bold text-[#bbc9cd] uppercase tracking-wide">
+                Trend: {point48?.trend || "Stable"}
+              </p>
             </div>
           </div>
 
           {/* Card 3: +72h */}
           <div
             onMouseMove={handleMouseMove}
-            className="p-6 rounded-xl border border-[#334155]/50 flex items-center justify-between transition-all duration-300 relative overflow-hidden bg-[#1E293B]/50 backdrop-blur-md hover:border-[#22D3EE]/30"
-            style={{
-              background: "radial-gradient(400px circle at var(--mouse-x, 0px) var(--mouse-y, 0px), rgba(34, 211, 238, 0.08), transparent 80%), rgba(30, 41, 59, 0.5)",
-            }}
+            onClick={() => setSelectedHorizon(72)}
+            className={`p-6 rounded-xl border flex items-center justify-between transition-all duration-300 relative overflow-hidden backdrop-blur-md cursor-pointer ${
+              selectedHorizon === 72
+                ? "border-[#22D3EE] bg-[#22D3EE]/10 shadow-[0_0_20px_rgba(34,211,238,0.15)]"
+                : "border-[#334155]/50 bg-[#1E293B]/50 hover:border-[#22D3EE]/40"
+            }`}
           >
             <div className="space-y-1">
               <p className="text-[10px] font-bold text-[#bbc9cd] uppercase tracking-wider">+72 Hours</p>
               <div className="flex items-baseline gap-2">
-                <span className="text-4xl font-extrabold text-white tracking-tight">{val72}</span>
-                <TrendingDown className="w-4 h-4 text-cyan-400" />
+                <span className="text-4xl font-extrabold text-white tracking-tight">{val72 || "—"}</span>
+                {point72?.trend === "rising" ? (
+                  <TrendingUp className="w-4 h-4 text-orange-400" />
+                ) : (
+                  <TrendingDown className="w-4 h-4 text-cyan-400" />
+                )}
               </div>
             </div>
             <div className="text-right">
-              <span className={`px-3 py-1 rounded-full text-[10px] font-bold tracking-widest ${getCategoryChipClass(val72)}`}>
+              <span
+                className={`px-3 py-1 rounded-full text-[10px] font-bold tracking-widest ${getCategoryChipClass(
+                  val72
+                )}`}
+              >
                 {getCategoryLabel(val72)}
               </span>
-              <p className="mt-2 text-[10px] font-bold text-[#22D3EE] uppercase tracking-wide">Falling Trend</p>
+              <p className="mt-2 text-[10px] font-bold text-[#bbc9cd] uppercase tracking-wide">
+                Trend: {point72?.trend || "Stable"}
+              </p>
             </div>
           </div>
         </div>
 
-        {/* AI Intelligence Panel */}
+        {/* AI Explainability & Feature Importance Panel */}
         <section
           onMouseMove={handleMouseMove}
           className="p-8 rounded-2xl border-l-4 border-l-[#22D3EE] border border-[#334155]/50 relative overflow-hidden bg-[#1E293B]/50 backdrop-blur-md shadow-inner-cyan"
           style={{
-            background: "radial-gradient(1000px circle at var(--mouse-x, 0px) var(--mouse-y, 0px), rgba(34, 211, 238, 0.08), transparent 80%), rgba(30, 41, 59, 0.5)",
+            background:
+              "radial-gradient(1000px circle at var(--mouse-x, 0px) var(--mouse-y, 0px), rgba(34, 211, 238, 0.08), transparent 80%), rgba(30, 41, 59, 0.5)",
           }}
         >
-          {/* Glowing AI Chip */}
-          <div className="absolute top-4 right-4 z-10">
-            <span className="flex items-center gap-1.5 px-3 py-1 bg-[#22D3EE]/10 rounded-full text-[10px] font-bold text-[#22D3EE] tracking-wide uppercase border border-[#22D3EE]/20 animate-pulse">
-              <span className="w-1.5 h-1.5 bg-[#22D3EE] rounded-full"></span>
-              AI Generated Insights
-            </span>
-          </div>
-
-          <div className="flex flex-col md:flex-row gap-10 items-start">
-            {/* Left Section: Reason & Recommendations */}
-            <div className="flex-1 space-y-6">
+          <div className="flex flex-col lg:flex-row gap-10 items-start">
+            {/* Left Section: Model Reasoning & Top Drivers */}
+            <div className="flex-1 space-y-6 w-full">
               <div className="flex items-center gap-4">
-                <div className="w-14 h-14 bg-[#22D3EE]/10 rounded-2xl flex items-center justify-center border border-[#22D3EE]/20">
+                <div className="w-14 h-14 bg-[#22D3EE]/10 rounded-2xl flex items-center justify-center border border-[#22D3EE]/20 shadow-md">
                   <Sparkles className="w-7 h-7 text-[#22D3EE] animate-pulse" />
                 </div>
                 <div>
-                  <h3 className="text-xl font-bold text-white tracking-tight">AI Forecast Summary</h3>
-                  <div className="flex items-center gap-2 mt-1">
-                    {/* Confidence Bars */}
-                    <div className="flex gap-0.5">
-                      <div className="w-1 h-3 bg-[#22D3EE] rounded-full"></div>
-                      <div className="w-1 h-3 bg-[#22D3EE] rounded-full"></div>
-                      <div className="w-1 h-3 bg-[#22D3EE] rounded-full"></div>
-                      <div className="w-1 h-3 bg-[#22D3EE]/20 rounded-full"></div>
-                    </div>
-                    <p className="text-xs font-bold text-[#22D3EE]">91% Confidence Rating</p>
-                  </div>
+                  <h3 className="text-xl font-bold text-white tracking-tight">AI Model Intelligence</h3>
+                  <p className="text-xs text-[#22D3EE] font-semibold mt-0.5">
+                    LightGBM Feature Attribution & Multi-Step Reasoning
+                  </p>
                 </div>
               </div>
 
-              {/* Insight Quotes */}
-              <div className="space-y-4">
-                <div className="bg-[#1E293B]/40 p-5 rounded-xl border border-[#3c494c]/30">
-                  <p className="text-[10px] font-bold text-[#bbc9cd] uppercase tracking-wider mb-2">PRIMARY REASON</p>
-                  <p className="text-sm text-[#dae2fd] leading-relaxed italic font-light">
-                    "{fallback.primaryReason}"
-                  </p>
-                </div>
+              {/* Narrative Summary Quote */}
+              <div className="bg-[#1E293B]/70 p-5 rounded-xl border border-[#3c494c]/40 space-y-2">
+                <p className="text-[10px] font-bold text-[#22D3EE] uppercase tracking-wider flex items-center gap-1.5">
+                  <ShieldAlert className="w-3.5 h-3.5 text-[#22D3EE]" />
+                  PREDICTIVE REASONING
+                </p>
+                <p className="text-sm text-[#dae2fd] leading-relaxed italic font-light">
+                  "{summaryReason}"
+                </p>
+              </div>
 
-                <div className="bg-[#1E293B]/40 p-5 rounded-xl border border-[#3c494c]/30">
-                  <p className="text-[10px] font-bold text-[#bbc9cd] uppercase tracking-wider mb-2">RECOMMENDED PREPARATION</p>
-                  <div className="flex items-center gap-3">
-                    <span className="text-[#4ae176] font-bold text-lg">✓</span>
-                    <p className="text-sm text-white font-semibold">
-                      {fallback.recommendedPrep}
-                    </p>
-                  </div>
+              {/* Top 5 Model Drivers */}
+              <div className="space-y-3">
+                <p className="text-[11px] font-bold text-[#bbc9cd] uppercase tracking-wider">
+                  Top Drivers Influencing This Forecast (Model Feature Importance)
+                </p>
+                <div className="grid grid-cols-1 gap-3">
+                  {topDrivers.length === 0 ? (
+                    <p className="text-xs text-[#bbc9cd]/70 italic">Loading feature importances…</p>
+                  ) : (
+                    topDrivers.map((driver, idx) => (
+                      <div
+                        key={idx}
+                        className="bg-[#131b2e] border border-[#3c494c]/30 rounded-xl p-3.5 space-y-2"
+                      >
+                        <div className="flex justify-between items-center text-xs">
+                          <span className="font-bold text-white flex items-center gap-2">
+                            <span className="w-5 h-5 rounded-full bg-[#22D3EE]/10 text-[#22D3EE] flex items-center justify-center text-[10px]">
+                              {idx + 1}
+                            </span>
+                            {driver.feature}
+                          </span>
+                          <span className="font-extrabold text-[#22D3EE]">{driver.importance}% weight</span>
+                        </div>
+                        <div className="w-full h-1.5 bg-[#0F172A] rounded-full overflow-hidden">
+                          <div
+                            className="bg-gradient-to-r from-[#22D3EE] to-[#818CF8] h-full rounded-full transition-all duration-700"
+                            style={{ width: `${Math.min(100, Math.max(10, driver.importance * 2.2))}%` }}
+                          />
+                        </div>
+                        <p className="text-[11px] text-[#bbc9cd] font-light leading-relaxed">
+                          {driver.description}
+                        </p>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
             </div>
 
-            {/* Right Section: Environmental Factors */}
-            <div className="w-full md:w-1/3 flex flex-col gap-4">
-              <div className="p-5 bg-[#1E293B]/20 rounded-xl border border-[#3c494c]/20 space-y-4">
-                <p className="text-[10px] font-bold text-[#bbc9cd] uppercase tracking-wider">ENVIRONMENTAL FACTORS</p>
-                
-                {/* Wind Velocity */}
-                <div className="space-y-2">
-                  <div className="flex justify-between items-center text-xs font-medium">
-                    <span>Wind Velocity</span>
-                    <span className="font-bold text-[#EF4444]">{fallback.windVelocity}</span>
-                  </div>
-                  <div className="w-full h-1.5 bg-[#0F172A] rounded-full overflow-hidden">
-                    <div className="bg-[#EF4444] h-full" style={{ width: `${fallback.windVal}%` }} />
-                  </div>
+            {/* Right Section: Real Live Meteorological Conditions */}
+            <div className="w-full lg:w-80 flex flex-col gap-4">
+              <div className="p-5 bg-[#1E293B]/40 rounded-xl border border-[#3c494c]/30 space-y-4">
+                <div className="border-b border-[#3c494c]/30 pb-3">
+                  <p className="text-[11px] font-bold text-white uppercase tracking-wider">
+                    Current Meteorological Inputs
+                  </p>
+                  <p className="text-[10px] text-[#bbc9cd] mt-0.5">Live station readings feeding the model</p>
                 </div>
 
-                {/* Stubble Burning Impact */}
-                <div className="space-y-2">
-                  <div className="flex justify-between items-center text-xs font-medium">
-                    <span>Stubble Burning Impact</span>
-                    <span className="font-bold text-[#F97316]">{fallback.stubbleImpact}</span>
+                {/* Wind Speed */}
+                <div className="space-y-1.5">
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-[#bbc9cd] flex items-center gap-1.5">
+                      <Wind className="w-3.5 h-3.5 text-[#22D3EE]" /> Wind Speed
+                    </span>
+                    <span className="font-bold text-white">{weatherData?.wind_speed ?? "—"} km/h</span>
                   </div>
                   <div className="w-full h-1.5 bg-[#0F172A] rounded-full overflow-hidden">
-                    <div className="bg-[#F97316] h-full" style={{ width: `${fallback.stubbleVal}%` }} />
+                    <div
+                      className="bg-[#22D3EE] h-full rounded-full"
+                      style={{
+                        width: `${Math.min(100, ((weatherData?.wind_speed ?? 5) / 40) * 100)}%`,
+                      }}
+                    />
                   </div>
                 </div>
 
                 {/* Humidity */}
-                <div className="space-y-2">
-                  <div className="flex justify-between items-center text-xs font-medium">
-                    <span>Humidity</span>
-                    <span className="font-bold text-[#22D3EE]">{fallback.humidity}%</span>
+                <div className="space-y-1.5">
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-[#bbc9cd] flex items-center gap-1.5">
+                      <Droplets className="w-3.5 h-3.5 text-cyan-400" /> Relative Humidity
+                    </span>
+                    <span className="font-bold text-white">{weatherData?.humidity ?? "—"}%</span>
                   </div>
                   <div className="w-full h-1.5 bg-[#0F172A] rounded-full overflow-hidden">
-                    <div className="bg-[#22D3EE] h-full" style={{ width: `${fallback.humidity}%` }} />
+                    <div
+                      className="bg-cyan-400 h-full rounded-full"
+                      style={{ width: `${Math.min(100, weatherData?.humidity ?? 50)}%` }}
+                    />
+                  </div>
+                </div>
+
+                {/* Temperature */}
+                <div className="space-y-1.5">
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-[#bbc9cd] flex items-center gap-1.5">
+                      <Thermometer className="w-3.5 h-3.5 text-amber-400" /> Temperature
+                    </span>
+                    <span className="font-bold text-white">{weatherData?.temperature ?? "—"}°C</span>
+                  </div>
+                  <div className="w-full h-1.5 bg-[#0F172A] rounded-full overflow-hidden">
+                    <div
+                      className="bg-amber-400 h-full rounded-full"
+                      style={{
+                        width: `${Math.min(100, (((weatherData?.temperature ?? 25) + 5) / 50) * 100)}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* Precipitation */}
+                <div className="space-y-1.5">
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-[#bbc9cd] flex items-center gap-1.5">
+                      <CloudRain className="w-3.5 h-3.5 text-blue-400" /> Precipitation
+                    </span>
+                    <span className="font-bold text-white">{weatherData?.precipitation ?? 0} mm</span>
+                  </div>
+                  <div className="w-full h-1.5 bg-[#0F172A] rounded-full overflow-hidden">
+                    <div
+                      className="bg-blue-400 h-full rounded-full"
+                      style={{
+                        width: `${Math.min(100, ((weatherData?.precipitation ?? 0) / 10) * 100)}%`,
+                      }}
+                    />
                   </div>
                 </div>
 

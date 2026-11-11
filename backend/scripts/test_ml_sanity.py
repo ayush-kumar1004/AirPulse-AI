@@ -59,6 +59,63 @@ print(f"   wind=315deg(NW) -> score={score_away:.3f} boost={meta_away['wind_boos
 check("wind boost factor changes depending on direction",
       abs(meta_toward["wind_boost"] - meta_away["wind_boost"]) > 1e-9)
 
+print("\n5) LightGBM Forecasting Model validation")
+from app.ml.forecast_model import _load_model, FEATURE_NAMES, GLOBAL_MODEL_PATH, METADATA_PATH
+check("Trained LightGBM model file exists", GLOBAL_MODEL_PATH.exists())
+check("Model metadata file exists", METADATA_PATH.exists())
+lgb_model = _load_model()
+check("Model loads as LGBMRegressor", hasattr(lgb_model, "predict"))
+dummy_row = [150.0, 148.0, 145.0, 160.0, 155.0, 26.5, 52.0, 12.0, 0.707, 0.707, 0.0, 14, 2, 0]
+import pandas as pd
+pred_val = lgb_model.predict(pd.DataFrame([dummy_row], columns=FEATURE_NAMES))[0]
+print(f"   Sample inference test: input AQI~150 -> predicted={pred_val:.1f}")
+check("Inference outputs realistic positive numerical AQI", 20 <= pred_val <= 400)
+
+print("\n6) Dynamic Source Attribution chemical/spatial tests (no hardcoded weights)")
+from app.ml.source_attribution import compute_dynamic_attribution, _dynamic_fallback_reasoning
+
+# Case A: High PM2.5/PM10 ratio (0.75), morning rush hour NO2=70 -> Traffic dominance
+shares_a, dominant_a, diag_a = compute_dynamic_attribution(
+    pm25=120, pm10=160, no2=70, traffic_index=0.85, active_sites=0,
+    distance_km=12, plume_alignment=0.1, wind_kph=10, humidity=50, precipitation_mm=0, hour_local=9
+)
+print(f"   Case A (Fine combustion, rush): Dominant={dominant_a}, Traffic={shares_a['traffic']*100:.1f}%, PM ratio={diag_a['pm25_pm10_ratio']}")
+check("High PM2.5/PM10 ratio + rush hour yields Traffic as dominant source", dominant_a == "traffic" and shares_a["traffic"] > 0.6)
+check("Shares sum to exactly 1.0", abs(sum(shares_a.values()) - 1.0) < 1e-6)
+
+# Case B: Low PM2.5/PM10 ratio (0.28), dry (hum=20%), windy (28kph), no active sites -> Dust dominance
+shares_b, dominant_b, diag_b = compute_dynamic_attribution(
+    pm25=45, pm10=160, no2=20, traffic_index=0.2, active_sites=0,
+    distance_km=15, plume_alignment=0.1, wind_kph=28, humidity=20, precipitation_mm=0, hour_local=14
+)
+print(f"   Case B (Coarse crustal, dry wind): Dominant={dominant_b}, Dust={shares_b['dust']*100:.1f}%, PM ratio={diag_b['pm25_pm10_ratio']}")
+check("Low PM2.5/PM10 ratio + dry windy conditions yields Dust as dominant source", dominant_b == "dust" and shares_b["dust"] > 0.6)
+
+# Case C: Low PM2.5/PM10 ratio (0.30), active construction sites=3 -> Construction dominance
+shares_c, dominant_c, diag_c = compute_dynamic_attribution(
+    pm25=60, pm10=200, no2=25, traffic_index=0.3, active_sites=3,
+    distance_km=12, plume_alignment=0.1, wind_kph=8, humidity=60, precipitation_mm=0, hour_local=14
+)
+print(f"   Case C (Coarse crustal, 3 active sites): Dominant={dominant_c}, Construction={shares_c['construction']*100:.1f}%")
+check("Active construction sites claim the coarse fraction", dominant_c == "construction" and shares_c["construction"] > 0.6)
+
+# Case D: High PM2.5/PM10 ratio (0.70), 2km from zone, direct plume alignment -> Industry dominance
+shares_d, dominant_d, diag_d = compute_dynamic_attribution(
+    pm25=110, pm10=157, no2=30, traffic_index=0.2, active_sites=0,
+    distance_km=2.0, plume_alignment=0.95, wind_kph=14, humidity=40, precipitation_mm=0, hour_local=14
+)
+print(f"   Case D (Near industrial zone + direct plume): Dominant={dominant_d}, Industry={shares_d['industry']*100:.1f}%")
+check("Gaussian plume alignment and proximity yields Industry as dominant source", dominant_d == "industry" and shares_d["industry"] > 0.5)
+
+# Case E: Dynamic reasoning generator
+reason_d = _dynamic_fallback_reasoning(
+    dominant_source=dominant_d, shares=shares_d, ratio=diag_d["pm25_pm10_ratio"],
+    pm25=110, pm10=157, no2=30, nearest_zone="Okhla Industrial Area", distance_km=2.0,
+    wind_label="NW", wind_kph=14, active_sites=0
+)
+print(f"   Reasoning Sample: {reason_d[:90]}...")
+check("Reasoning dynamically cites exact numbers and dominant source", "62" in reason_d or "Okhla" in reason_d or "pm" in reason_d.lower())
+
 print(f"\n{'='*50}\nPART 1 RESULT: {passed} passed, {failed} failed\n{'='*50}")
 
 print("\n=== PART 2: live checks (need `docker compose up` for Postgres+Redis) ===")

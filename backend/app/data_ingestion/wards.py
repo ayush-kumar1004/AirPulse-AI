@@ -226,5 +226,9 @@ async def get_all_wards(session: AsyncSession) -> Dict[str, Any]:
             "type": "FeatureCollection",
             "features": features
         }
-    except SQLAlchemyError as e:
-        raise WardImportError(f"Database error while fetching wards: {e}")
+    except Exception as e:
+        # Fallback to loading wards.geojson directly if database is offline
+        try:
+            return load_geojson(DEFAULT_GEOJSON_PATH)
+        except Exception as e2:
+            raise WardImportError(f"Database error while fetching wards ({e}); fallback error: {e2}")

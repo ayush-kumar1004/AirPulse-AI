@@ -1,0 +1,23 @@
+{
+  "model_type": "LightGBM Regressor",
+  "trained_at": "2026-11-10T13:08:28.089010+00:00",
+  "training_samples": 696,
+  "rmse": 1.32,
+  "mae": 0.76,
+  "feature_importances": {
+    "aqi_lag_1": 0.3721,
+    "aqi_lag_2": 0.0874,
+    "aqi_lag_3": 0.0707,
+    "aqi_lag_24": 0.0891,
+    "aqi_lag_48": 0.0515,
+    "temperature": 0.0494,
+    "humidity": 0.0441,
+    "wind_speed": 0.0498,
+    "wind_dir_sin": 0.0584,
+    "wind_dir_cos": 0.0298,
+    "precipitation": 0.0176,
+    "hour": 0.0413,
+    "day_of_week": 0.0376,
+    "is_weekend": 0.0012
+  }
+}

@@ -52,26 +52,25 @@ def _recommend_actions_uncached(ward_id: str) -> dict:
         construction_data = fetch_construction(ward_id)
     except Exception as e:
         logger.error(f"Error fetching data for ward {ward_id} recommendation: {e}", exc_info=True)
-        # Return fallback mock/sensible data if core endpoints fail
-        return {
-            "ward_id": ward_id,
-            "actions": [
-                {
-                    "action": "Increase road water-spraying and traffic monitoring",
-                    "target": f"Ward {ward_id} main corridors",
-                    "urgency": "medium",
-                    "reason": f"Data ingestion issue: fallback action triggered for ward {ward_id}."
-                }
-            ],
-            "inspection_priority": [
-                {
-                    "site": "Arterial road intersection",
-                    "ward_id": ward_id,
-                    "reason": "Visual inspection of dust/traffic levels due to API fallback",
-                    "priority": 1
-                }
-            ]
-        }
+        raise RuntimeError(f"TelemetryUnavailableError: Unable to synchronize live telemetry for ward {ward_id} recommendations: {e}")
+
+    # Retrieve matching statutory regulatory directives via RAG
+    aqi_val = aqi_data.get('aqi', 200)
+    if aqi_val <= 300:
+        stage_term = "Stage I"
+    elif aqi_val <= 400:
+        stage_term = "Stage II"
+    elif aqi_val <= 450:
+        stage_term = "Stage III"
+    else:
+        stage_term = "Stage IV"
+
+    from app.llm.data_bridge import fetch_regulations
+    reg_clauses = fetch_regulations(
+        query=f"GRAP {stage_term} {source_data.get('dominant_source', 'traffic')} municipal enforcement directives",
+        top_k=2
+    )
+    retrieved_reg_text = "\n".join([f"- [{c['section']}] {c['title']} ({c['legal_citation']}):\n  {c['content']}" for c in reg_clauses])
 
     # Prepare context block for the LLM
     context_str = f"""
@@ -84,12 +83,18 @@ Current Air Quality (CPCB Categories: good | satisfactory | moderate | poor | ve
 - PM10: {aqi_data['pm10']} µg/m³
 - NO2: {aqi_data['no2']} µg/m³
 
-Pollution Source Attribution Shares:
+Pollution Source Attribution (Dynamic Chemistry & Atmospheric Physics):
+- Dominant Source Driver: {source_data.get('dominant_source', 'traffic').upper()}
 - Traffic share: {source_data.get('traffic', 0.0) * 100:.1f}%
-- Construction share: {source_data.get('construction', 0.0) * 100:.1f}%
 - Industry share: {source_data.get('industry', 0.0) * 100:.1f}%
+- Construction share: {source_data.get('construction', 0.0) * 100:.1f}%
 - Dust share: {source_data.get('dust', 0.0) * 100:.1f}%
-- Source Attribution Explanation: {source_data.get('reasoning', '')}
+- PM2.5/PM10 Ratio: {source_data.get('raw_factors', {}).get('pm25_pm10_ratio', round(aqi_data['pm25']/max(1.0, aqi_data['pm10']), 2))}
+- Nearest Industrial Cluster: {source_data.get('raw_factors', {}).get('nearest_zone', 'N/A')} ({source_data.get('raw_factors', {}).get('distance_km', 'N/A')} km)
+- Source Attribution Scientific Analysis: {source_data.get('reasoning', '')}
+
+Retrieved Statutory Provisions (CAQM GRAP / Air Act):
+{retrieved_reg_text}
 
 Simulated Local Activity Indicators:
 - Traffic Density Index (0-1): {traffic_data.traffic_index:.2f}
@@ -107,19 +112,15 @@ AQI 24h Forecast:
 """
 
     system_prompt = """You are an AI environmental advisor for the Delhi Government's environmental protection division.
-Based on the current ward-level air quality, source attribution shares, local activity indicators, weather conditions, and forecast, you must recommend a set of targeted government actions and prioritize inspection sites.
+Based on the current ward-level air quality, source attribution shares, local activity indicators, weather conditions, forecast, and retrieved statutory regulations, you must recommend a set of targeted government actions and prioritize inspection sites.
 
-Map the current situation to Delhi's regulatory levers and Graded Response Action Plan (GRAP) guidelines:
-- GRAP Stage I (AQI 201-300 'Poor'): Dust control at construction sites, mechanical sweeping, road water-spraying, strict action on biomass burning.
-- GRAP Stage II (AQI 301-400 'Very Poor'): Ban coal/firewood in eateries, restrict diesel generators, increase public transit frequency, dust suppression.
-- GRAP Stage III (AQI 401-450 'Severe'): Ban non-essential construction/demolition, restrict BS-III petrol & BS-IV diesel vehicles.
-- GRAP Stage IV (AQI >450 'Severe+'): Stop truck entry (except essentials), ban Delhi-registered diesel medium/heavy goods vehicles.
+Anchor your recommended actions strictly in the retrieved statutory provisions (citing CAQM Direction No. 75, GRAP Stage mandates, and Air Act sections).
 
 ACTION LEVERS TO RECOMMEND:
-1. High traffic share: Restrict heavy diesel trucks (e.g., on Ring Road peak hours 6-10 AM), enforce PUC compliance, or promote public transit. Cite GRAP stages as appropriate.
-2. High construction share: Halt open construction, mandate dust netting, enforce water spraying.
+1. High traffic share: Restrict heavy diesel trucks, enforce PUC compliance, or promote public transit. Cite GRAP stages as appropriate.
+2. High construction share: Halt open construction, mandate dust netting, enforce anti-smog water spraying.
 3. High dust share: Deploy road water-spraying tankers, mechanised road sweeping.
-4. High industry: Audit/inspect nearby factories (e.g., Okhla Industrial Area), verify emission control, temporary shutdowns.
+4. High industry: Audit/inspect nearby factories, verify clean fuel compliance (PNG/biomass), temporary shutdowns.
 
 URGENCY RULES:
 - 'high' urgency: if AQI is Poor/Very Poor/Severe (>200) and forecast trend is rising, or if a source share is extremely dominant.
@@ -127,7 +128,7 @@ URGENCY RULES:
 - 'low' urgency: if AQI is Good/Satisfactory (<100) or falling.
 
 INSPECTION PRIORITY RULES:
-- Propose specific sites (like 'Metro Phase-4 site', 'Okhla Industrial Area', or major roads) for inspection in this ward.
+- Propose specific sites (like 'Metro Phase-4 site', 'Industrial Area', or major corridors) for inspection in this ward.
 - Provide a priority rating: 1 for the most urgent/highest priority site, 2 for the second, etc.
 - Base the reasons on the dominant pollution source.
 

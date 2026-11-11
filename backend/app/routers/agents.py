@@ -7,7 +7,7 @@ from fastapi import APIRouter, Query
 from fastapi.concurrency import run_in_threadpool
 
 from app.llm.citizen_advisor import advise
-from app.llm.officer_chat import chat as chat_agent
+from app.llm.officer_chat import chat as chat_agent, get_chat_history
 from app.llm.recommendation_agent import recommend_actions
 from app.models.schemas import (
     ChatRequest,
@@ -71,8 +71,54 @@ async def advisory(
 @router.post("/chat", response_model=ChatResponse)
 async def chat(req: ChatRequest):
     """Officer chat agent — answers e.g. 'why is Zone 4 polluted today?' / 'which ward first?' by calling
-    other modules as tools."""
+    other modules as tools with multi-turn session memory."""
     # Not cached: each question is different, and a repeated question should get a
     # fresh answer against current conditions.
-    data = await run_in_threadpool(chat_agent, req.message, req.ward_id)
+    data = await run_in_threadpool(chat_agent, req.message, req.ward_id, req.session_id)
     return ChatResponse(**data)
+
+
+@router.get("/chat/history")
+async def chat_history(session_id: str = Query(...)):
+    """Retrieve persistent conversation history for an officer session from the checkpointer."""
+    messages = await run_in_threadpool(get_chat_history, session_id)
+    return {"session_id": session_id, "messages": messages}
+
+
+@router.get("/regulations/search")
+async def search_regulations_endpoint(
+    query: str = Query(..., description="Query for statutory air regulations"),
+    top_k: int = Query(5, ge=1, le=10),
+    category: str | None = Query(None, description="Optional category filter e.g. GRAP_STAGE_3, AIR_ACT_1981"),
+):
+    """Semantic vector search across GRAP, CAQM Directions, and Air Act 1981."""
+    from app.rag.vector_store import similarity_search_db
+    results = await similarity_search_db(query=query, top_k=top_k, category=category)
+    return {"query": query, "total_matches": len(results), "results": results}
+
+
+@router.get("/simulate")
+async def simulate_endpoint(
+    ward_id: str = Query("CANT_1", description="Ward ID or 'citywide'"),
+    intervention: str = Query("construction_ban", description="Intervention type e.g. construction_ban, diesel_truck_ban, odd_even"),
+    intensity: float = Query(1.0, ge=0.1, le=1.0),
+    horizon: int = Query(24, ge=12, le=72),
+):
+    """Run What-If Policy Intervention Simulation coupling Source Attribution with LightGBM."""
+    from app.ml.intervention_simulator import simulate_ward_intervention, simulate_citywide_intervention
+    if ward_id.lower() in ("citywide", "all"):
+        return simulate_citywide_intervention(intervention, intensity, horizon)
+    return simulate_ward_intervention(ward_id, intervention, intensity, horizon)
+
+
+@router.get("/observability/telemetry")
+async def telemetry_endpoint(
+    limit: int = Query(50, ge=1, le=200),
+    event_type: str | None = Query(None, description="Optional filter: ml_forecast_inference, agent_tool_call, rag_retrieval, policy_simulation, model_evaluation"),
+):
+    """Inspect structured runtime telemetry events, tool calls, and model inference metrics."""
+    from app.observability import get_recent_telemetry_events
+    events = get_recent_telemetry_events(limit=limit, event_type=event_type)
+    return {"total_events": len(events), "events": events}
+
+
