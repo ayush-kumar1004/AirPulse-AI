@@ -22,6 +22,9 @@ settings = get_settings()
 logging.basicConfig(level=settings.log_level.upper())
 logger = logging.getLogger(__name__)
 
+# Suppress benign advisory logs from google-genai AFC deprecation notice
+logging.getLogger("google_genai.models").setLevel(logging.ERROR)
+
 
 # How often to re-pull city AQI. Open-Meteo updates hourly, so anything faster
 # just burns requests.
@@ -53,31 +56,30 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS configured ONCE here. Frontend uses exactly one backend URL.
+# CORS configured for local dev and cloud deployments (*.onrender.com, *.vercel.app)
+cors_origins = [settings.frontend_origin, "http://localhost:5173"]
+if settings.frontend_origin and settings.frontend_origin not in cors_origins:
+    cors_origins.append(settings.frontend_origin)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.frontend_origin, "http://localhost:5173"],
+    allow_origins=cors_origins,
+    allow_origin_regex=r"https://.*\.onrender\.com|https://.*\.vercel\.app|http://localhost:\d+",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-ALLOWED_ORIGINS = [settings.frontend_origin, "http://localhost:5173"]
+ALLOWED_ORIGINS = cors_origins
 
 
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception):
-    """Return a real 500 body with CORS headers instead of a bare connection drop.
-
-    Starlette's error middleware sits outside CORSMiddleware, so an unhandled
-    exception produces a response with no Access-Control-Allow-Origin header. The
-    browser then reports a confusing "blocked by CORS policy" error that hides the
-    actual server-side cause. Setting the header here keeps the real error visible.
-    """
+    """Return a real 500 body with CORS headers instead of a bare connection drop."""
     logger.exception("Unhandled error on %s %s", request.method, request.url.path)
 
     origin = request.headers.get("origin")
-    headers = {"Access-Control-Allow-Origin": origin} if origin in ALLOWED_ORIGINS else {}
+    headers = {"Access-Control-Allow-Origin": origin} if origin else {}
 
     return JSONResponse(
         status_code=500,
