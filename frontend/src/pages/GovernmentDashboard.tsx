@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   Sparkles,
   MapPin,
@@ -44,8 +45,11 @@ interface WardOption {
 }
 
 export default function GovernmentDashboard() {
+  const [searchParams] = useSearchParams();
+  const urlWard = searchParams.get("ward");
+
   const [wards, setWards] = useState<WardOption[]>([]);
-  const [selectedWard, setSelectedWard] = useState<string>("W01");
+  const [selectedWard, setSelectedWard] = useState<string>(urlWard || "CANT_1");
   const [recommendations, setRecommendations] = useState<any>(null);
   const [loadingRecs, setLoadingRecs] = useState<boolean>(true);
 
@@ -125,10 +129,12 @@ export default function GovernmentDashboard() {
       try {
         const res = await getWards();
         const features = res?.features ?? [];
-        const options: WardOption[] = features.map((f: any) => ({
-          id: f.properties?.id ?? f.id ?? "W01",
-          name: f.properties?.name ?? `Ward ${f.properties?.id ?? "W01"}`,
-        }));
+        const options: WardOption[] = features
+          .map((f: any) => ({
+            id: f.properties?.ward_id ?? f.properties?.id ?? f.id,
+            name: f.properties?.ward_name ?? f.properties?.Ward_Name ?? f.properties?.name ?? `Ward ${f.properties?.ward_id ?? f.id ?? ""}`,
+          }))
+          .filter((w: WardOption) => Boolean(w.id));
 
         if (options.length === 0) {
           options.push(
@@ -147,8 +153,11 @@ export default function GovernmentDashboard() {
 
         if (isMounted) {
           setWards(options);
-          if (!options.some((o) => o.id === selectedWard)) {
-            setSelectedWard(options[0].id);
+          const currentUrlWard = searchParams.get("ward");
+          if (currentUrlWard && options.some((o) => o.id === currentUrlWard)) {
+            setSelectedWard(currentUrlWard);
+          } else if (!options.some((o) => o.id === selectedWard)) {
+            setSelectedWard(options[0]?.id || "CANT_1");
           }
         }
       } catch (err) {

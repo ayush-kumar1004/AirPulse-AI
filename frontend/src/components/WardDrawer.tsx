@@ -1,4 +1,5 @@
 import React, { useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { MapPin, Sparkles, Bot, Sun } from "lucide-react";
 
 interface WardDrawerProps {
@@ -82,6 +83,7 @@ export default function WardDrawer({
   attributionData,
   forecastData,
 }: WardDrawerProps) {
+  const navigate = useNavigate();
   // Empty State
   if (!wardId) {
     return (
@@ -316,7 +318,10 @@ export default function WardDrawer({
       </div>
 
       {/* CTA Button */}
-      <button className="mt-auto w-full bg-[#22D3EE] text-[#001f25] font-bold py-3 rounded-xl flex items-center justify-center gap-2 hover:brightness-110 active:scale-[0.98] transition-all shadow-[0_0_15px_rgba(34,211,238,0.2)]">
+      <button
+        onClick={() => wardId && navigate(`/government?ward=${wardId}`)}
+        className="mt-auto w-full bg-[#22D3EE] text-[#001f25] font-bold py-3 rounded-xl flex items-center justify-center gap-2 hover:brightness-110 active:scale-[0.98] transition-all shadow-[0_0_15px_rgba(34,211,238,0.2)]"
+      >
         <Bot className="w-4 h-4" />
         <span className="text-xs uppercase tracking-wider font-bold">Ask the AI about this ward</span>
       </button>

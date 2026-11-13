@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import {
   MapPin,
   Sparkles,
@@ -44,8 +44,11 @@ interface AdvisoryData {
 }
 
 export default function CitizenView() {
+  const [searchParams] = useSearchParams();
+  const urlWard = searchParams.get("ward");
+
   const [wards, setWards] = useState<WardOption[]>([]);
-  const [selectedWard, setSelectedWard] = useState<string>("W01");
+  const [selectedWard, setSelectedWard] = useState<string>(urlWard || "CANT_1");
   const [selectedProfile, setSelectedProfile] = useState<string>("asthma");
   const [selectedLang, setSelectedLang] = useState<string>("en");
 
@@ -84,10 +87,12 @@ export default function CitizenView() {
       try {
         const res = await getWards();
         const features = res?.features ?? [];
-        const options: WardOption[] = features.map((f: any) => ({
-          id: f.properties?.id ?? f.id ?? "W01",
-          name: f.properties?.name ?? `Ward ${f.properties?.id ?? "W01"}`,
-        }));
+        const options: WardOption[] = features
+          .map((f: any) => ({
+            id: f.properties?.ward_id ?? f.properties?.id ?? f.id,
+            name: f.properties?.ward_name ?? f.properties?.Ward_Name ?? f.properties?.name ?? `Ward ${f.properties?.ward_id ?? f.id ?? ""}`,
+          }))
+          .filter((w: WardOption) => Boolean(w.id));
 
         if (options.length === 0) {
           // Standard Delhi Ward defaults if empty GeoJSON
@@ -107,8 +112,11 @@ export default function CitizenView() {
 
         if (isMounted) {
           setWards(options);
-          if (!options.some((o) => o.id === selectedWard)) {
-            setSelectedWard(options[0].id);
+          const currentUrlWard = searchParams.get("ward");
+          if (currentUrlWard && options.some((o) => o.id === currentUrlWard)) {
+            setSelectedWard(currentUrlWard);
+          } else if (!options.some((o) => o.id === selectedWard)) {
+            setSelectedWard(options[0]?.id || "CANT_1");
           }
         }
       } catch (err) {

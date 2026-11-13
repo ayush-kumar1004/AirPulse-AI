@@ -110,7 +110,7 @@ export default function ForecastScreen() {
       setLoading(true);
       try {
         const [predictRes, weatherRes] = await Promise.allSettled([
-          getPredict(selectedWardId, selectedHorizon),
+          getPredict(selectedWardId, 72),
           getWeather(selectedWardId),
         ]);
 
@@ -133,7 +133,7 @@ export default function ForecastScreen() {
     return () => {
       isMounted = false;
     };
-  }, [selectedWardId, selectedHorizon]);
+  }, [selectedWardId]);
 
   // Card mouse tracking glow
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -149,8 +149,11 @@ export default function ForecastScreen() {
     wardsList.find((w) => w.id === selectedWardId)?.name || "Loading Ward…";
 
   const points = forecastData?.points ?? [];
+  const displayedPoints = useMemo(() => {
+    return points.slice(0, selectedHorizon);
+  }, [points, selectedHorizon]);
 
-  // Dynamic values at +24h, +48h, and +72h directly from the real prediction array
+  // Dynamic values at +24h, +48h, and +72h directly from the full 72h prediction array
   const point24 = points.length >= 24 ? points[23] : points[points.length - 1];
   const point48 = points.length >= 48 ? points[47] : points[points.length - 1];
   const point72 = points.length >= 72 ? points[71] : points[points.length - 1];
@@ -159,10 +162,10 @@ export default function ForecastScreen() {
   const val48 = point48?.predicted_aqi ?? 0;
   const val72 = point72?.predicted_aqi ?? 0;
 
-  // Format Recharts data series from API response
+  // Format Recharts data series from displayed slice
   const chartData = useMemo(() => {
-    if (!points.length) return [];
-    return points.map((p) => {
+    if (!displayedPoints.length) return [];
+    return displayedPoints.map((p) => {
       const date = new Date(p.timestamp);
       const timeStr = date.toLocaleTimeString([], {
         hour: "2-digit",
@@ -178,7 +181,7 @@ export default function ForecastScreen() {
         trend: p.trend,
       };
     });
-  }, [points]);
+  }, [displayedPoints]);
 
   const topDrivers = forecastData?.top_features ?? [];
   const modelName = forecastData?.model ?? "LightGBM Regressor (Tabular)";

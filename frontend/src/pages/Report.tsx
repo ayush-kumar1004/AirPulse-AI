@@ -3,6 +3,7 @@ import { jsPDF } from "jspdf";
 import html2canvas from "html2canvas";
 import ForecastChart from "../components/ForecastChart";
 import SourceBreakdown from "../components/SourceBreakdown";
+import { getHeatmap } from "../api/client";
 
 export default function Report() {
   const [loading, setLoading] = useState(true);
@@ -10,6 +11,10 @@ export default function Report() {
   const [progressWidth, setProgressWidth] = useState(0);
   const [fadeOverlay, setFadeOverlay] = useState(false);
   const [generationTime, setGenerationTime] = useState("");
+  const [cityAvgAqi, setCityAvgAqi] = useState<number>(381);
+  const [cityCategory, setCityCategory] = useState<string>("Very Poor");
+  const [worstWard, setWorstWard] = useState<{ name: string; aqi: number }>({ name: "Bankner", aqi: 482 });
+  const [bestWard, setBestWard] = useState<{ name: string; aqi: number }>({ name: "Kishangarh", aqi: 316 });
 
   // Mouse move handler for tracking glow
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -20,6 +25,27 @@ export default function Report() {
     card.style.setProperty("--mouse-x", `${x}px`);
     card.style.setProperty("--mouse-y", `${y}px`);
   };
+
+  useEffect(() => {
+    getHeatmap()
+      .then((data) => {
+        if (!data || !data.length) return;
+        const avg = Math.round(data.reduce((sum: number, w: any) => sum + w.aqi, 0) / data.length);
+        setCityAvgAqi(avg);
+        if (avg <= 50) setCityCategory("Good");
+        else if (avg <= 100) setCityCategory("Satisfactory");
+        else if (avg <= 200) setCityCategory("Moderate");
+        else if (avg <= 300) setCityCategory("Poor");
+        else if (avg <= 400) setCityCategory("Very Poor");
+        else setCityCategory("Severe");
+
+        const sorted = [...data].sort((a: any, b: any) => b.aqi - a.aqi);
+        setWorstWard({ name: sorted[0].ward_name, aqi: sorted[0].aqi });
+        const clean = sorted[sorted.length - 1];
+        setBestWard({ name: clean.ward_name, aqi: clean.aqi });
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     // Live generation timestamp
@@ -269,9 +295,9 @@ export default function Report() {
           >
             <p className="text-[10px] font-bold text-[#bbc9cd] uppercase tracking-wider">Current City AQI</p>
             <div className="flex items-end justify-between">
-              <span className="text-5xl font-extrabold text-[#ef4444] leading-none">241</span>
+              <span className="text-5xl font-extrabold text-[#22D3EE] leading-none">{cityAvgAqi}</span>
               <span className="px-2 py-0.5 bg-[#ef4444]/10 border border-[#ef4444]/20 text-[#ef4444] rounded text-[10px] font-bold uppercase tracking-wider mb-1">
-                Severe
+                {cityCategory}
               </span>
             </div>
           </div>
@@ -287,8 +313,8 @@ export default function Report() {
           >
             <p className="text-[10px] font-bold text-[#bbc9cd] uppercase tracking-wider">Worst Ward</p>
             <div>
-              <span className="text-xl font-bold text-white block">Rohini</span>
-              <span className="text-xs font-semibold text-[#ef4444]">AQI 312</span>
+              <span className="text-xl font-bold text-white block truncate">{worstWard.name}</span>
+              <span className="text-xs font-semibold text-[#ef4444]">AQI {worstWard.aqi}</span>
             </div>
           </div>
 
@@ -303,8 +329,8 @@ export default function Report() {
           >
             <p className="text-[10px] font-bold text-[#bbc9cd] uppercase tracking-wider">Best Ward</p>
             <div>
-              <span className="text-xl font-bold text-white block">Vasant Kunj</span>
-              <span className="text-xs font-semibold text-[#22c55e]">AQI 88 (Satisfactory)</span>
+              <span className="text-xl font-bold text-white block truncate">{bestWard.name}</span>
+              <span className="text-xs font-semibold text-[#22c55e]">AQI {bestWard.aqi}</span>
             </div>
           </div>
 

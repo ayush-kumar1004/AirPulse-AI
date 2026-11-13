@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   getWards,
   getHeatmap,
@@ -35,12 +36,11 @@ const adaptWeather = (w: any) =>
     : null;
 
 export default function PollutionMap() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const urlWard = searchParams.get("ward");
+
   // Central State Management
-  // Starts empty and is set to the first ward the API actually returns. Hardcoding an
-  // id here (it used to be "W02") breaks against the real 290-ward Delhi dataset, whose
-  // ids look like "CANT_1" / "NDMC_1" — every ward-detail call 500s on a ward that
-  // doesn't exist.
-  const [wardId, setWardId] = useState<string | null>(null);
+  const [wardId, setWardId] = useState<string | null>(urlWard || null);
   const [overlayMode, setOverlayMode] = useState<OverlayMode>("current");
 
   // Global Datasets
@@ -77,10 +77,10 @@ export default function PollutionMap() {
       setWardsGeoJson(wardsRes);
       setHeatmapData(heatmapRes);
 
-      // Select the first real ward so the detail panel has something valid to show.
-      const firstWardId = wardsRes?.features?.[0]?.properties?.ward_id;
-      if (firstWardId) {
-        setWardId((current) => current ?? firstWardId);
+      // Select requested ward from query param or the first real ward
+      const targetWard = searchParams.get("ward") || wardsRes?.features?.[0]?.properties?.ward_id;
+      if (targetWard) {
+        setWardId((current) => current ?? targetWard);
       }
     } catch (err: any) {
       console.error("Error loading environmental map data:", err);
@@ -149,7 +149,10 @@ export default function PollutionMap() {
   // Callback to update selected ward
   const handleSelectWard = useCallback((id: string | null) => {
     setWardId(id);
-  }, []);
+    if (id) {
+      setSearchParams({ ward: id }, { replace: true });
+    }
+  }, [setSearchParams]);
 
   // Callback to update active overlay mode
   const handleOverlayChange = useCallback((mode: OverlayMode) => {

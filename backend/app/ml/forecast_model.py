@@ -583,8 +583,11 @@ async def predict(session: AsyncSession, ward_id: str, horizon_hours: int = 24) 
     forecast_temps = []
     forecast_rains = []
 
-    # Model baseline residual uncertainty
+    # Model baseline residual uncertainty & CPCB scaling calibration
     base_sigma = meta.get("rmse", 14.5)
+    cpcb_baseline = lag_buffer[-1]
+    norm_domain_base = 155.0
+    scale_factor = max(0.5, cpcb_baseline / norm_domain_base)
 
     # 4. Recursive Multi-Step Forecasting
     for step in range(horizon_hours):
@@ -610,13 +613,13 @@ async def predict(session: AsyncSession, ward_id: str, horizon_hours: int = 24) 
         day_of_week = target_time.weekday()
         is_weekend = 1 if day_of_week >= 5 else 0
 
-        # Construct single feature row
+        # Construct single feature row normalized to LightGBM training domain
         row = {
-            "aqi_lag_1": lag_buffer[-1],
-            "aqi_lag_2": lag_buffer[-2],
-            "aqi_lag_3": lag_buffer[-3],
-            "aqi_lag_24": lag_buffer[-24],
-            "aqi_lag_48": lag_buffer[-48],
+            "aqi_lag_1": lag_buffer[-1] / scale_factor,
+            "aqi_lag_2": lag_buffer[-2] / scale_factor,
+            "aqi_lag_3": lag_buffer[-3] / scale_factor,
+            "aqi_lag_24": lag_buffer[-24] / scale_factor,
+            "aqi_lag_48": lag_buffer[-48] / scale_factor,
             "temperature": temp,
             "humidity": humid,
             "wind_speed": wind,
@@ -629,14 +632,13 @@ async def predict(session: AsyncSession, ward_id: str, horizon_hours: int = 24) 
         }
 
         X_step = pd.DataFrame([row])[FEATURE_NAMES]
-        predicted_val = float(model.predict(X_step)[0])
-        # Bound sensibly to non-negative AQI
-        predicted_val = max(15, round(predicted_val))
+        norm_pred = float(model.predict(X_step)[0])
+        predicted_val = max(50, min(500, round(norm_pred * scale_factor)))
 
         # Dynamic uncertainty expansion over the forecast horizon
-        uncertainty = base_sigma * math.sqrt(1.0 + 0.035 * step)
-        lower = max(10, round(predicted_val - 1.96 * uncertainty))
-        upper = round(predicted_val + 1.96 * uncertainty)
+        uncertainty = (base_sigma * min(1.5, scale_factor)) * math.sqrt(1.0 + 0.035 * step)
+        lower = max(20, round(predicted_val - 1.96 * uncertainty))
+        upper = min(500, round(predicted_val + 1.96 * uncertainty))
 
         # Trend direction
         if predicted_val > prev_val + 2:
