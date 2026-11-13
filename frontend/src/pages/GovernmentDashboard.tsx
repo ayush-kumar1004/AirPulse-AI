@@ -131,10 +131,10 @@ export default function GovernmentDashboard() {
         const features = res?.features ?? [];
         const options: WardOption[] = features
           .map((f: any) => ({
-            id: f.properties?.ward_id ?? f.properties?.id ?? f.id,
-            name: f.properties?.ward_name ?? f.properties?.Ward_Name ?? f.properties?.name ?? `Ward ${f.properties?.ward_id ?? f.id ?? ""}`,
+            id: String(f.properties?.ward_id ?? f.properties?.id ?? f.id ?? "").trim(),
+            name: String(f.properties?.ward_name ?? f.properties?.Ward_Name ?? f.properties?.name ?? "").trim(),
           }))
-          .filter((w: WardOption) => Boolean(w.id));
+          .filter((w: WardOption) => Boolean(w.id) && w.id.toLowerCase() !== "none" && w.id.toLowerCase() !== "null");
 
         if (options.length === 0) {
           options.push(
