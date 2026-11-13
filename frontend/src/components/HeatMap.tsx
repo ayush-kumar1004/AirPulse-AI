@@ -13,13 +13,14 @@ export interface HeatMapProps {
   sourcesMap?: Record<string, any>;
 }
 
-// ── Colour helpers (unchanged from original) ──────────────────────────
+// ── Colour helpers (Official Indian CPCB National Air Quality Index scale) ──────────────────────────
 const getAqiColor = (aqi: number): string => {
-  if (aqi <= 50) return "#22C55E";   // Good
-  if (aqi <= 100) return "#EAB308";  // Moderate
-  if (aqi <= 150) return "#F97316";  // Poor
-  if (aqi <= 200) return "#EF4444";  // Very Poor
-  return "#7F1D1D";                  // Severe
+  if (aqi <= 50) return "#22C55E";   // Good (0-50)
+  if (aqi <= 100) return "#06B6D4";  // Satisfactory (51-100)
+  if (aqi <= 200) return "#EAB308";  // Moderate (101-200)
+  if (aqi <= 300) return "#F97316";  // Poor (201-300)
+  if (aqi <= 400) return "#EF4444";  // Very Poor (301-400)
+  return "#7F1D1D";                  // Severe (401-500)
 };
 
 const getSourceColor = (dominant: string): string => {

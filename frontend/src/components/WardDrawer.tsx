@@ -65,6 +65,8 @@ const getCategoryBadgeClass = (category: string) => {
       return "bg-[#EAB308]/20 text-[#EAB308] border-[#EAB308]/30";
     case "poor":
       return "bg-[#F97316]/20 text-[#F97316] border-[#F97316]/30";
+    case "very poor":
+      return "bg-[#EF4444]/20 text-[#EF4444] border-[#EF4444]/30";
     case "severe":
     case "hazardous":
       return "bg-[#7F1D1D] text-white border-[#7F1D1D]/50";
@@ -172,7 +174,7 @@ export default function WardDrawer({
 
         <div className="flex items-baseline gap-2 mt-4">
           <span className="text-5xl font-extrabold text-[#22D3EE] tracking-tight">{num(activeAqi)}</span>
-          <span className="text-[11px] font-semibold text-slate-400 tracking-wider uppercase">US AQI</span>
+          <span className="text-[11px] font-semibold text-slate-400 tracking-wider uppercase">CPCB AQI</span>
         </div>
         {!aqiData && (
           <p className="text-[11px] text-amber-400/90">

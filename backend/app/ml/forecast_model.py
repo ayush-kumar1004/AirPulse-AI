@@ -456,20 +456,32 @@ async def _get_recent_aqi_buffer(session: Optional[AsyncSession], ward_id: str, 
             vals = pad + vals
         return vals[-48:]
 
-    # Pull real recent observations directly from Open-Meteo
+    from app.data_ingestion.cpcb_aqi import get_calibrated_ward_telemetry
+    try:
+        telemetry = get_calibrated_ward_telemetry(ward_id)
+        cpcb_baseline = float(telemetry["aqi"])
+    except Exception:
+        cpcb_baseline = 360.0
+
+    # Pull real recent observations directly from Open-Meteo and scale to CPCB ground baseline
     try:
         hourly = await fetch_historical_aqi(latitude=lat, longitude=lon, past_days=3)
         past_aqis = [float(x) for x in hourly.get("us_aqi", []) if x is not None]
         if len(past_aqis) >= 48:
-            return past_aqis[-48:]
+            raw_mean = sum(past_aqis[-48:]) / 48.0
+            scale = cpcb_baseline / max(1.0, raw_mean)
+            return [round(min(500.0, max(50.0, x * scale)), 1) for x in past_aqis[-48:]]
         elif past_aqis:
+            raw_mean = sum(past_aqis) / len(past_aqis)
+            scale = cpcb_baseline / max(1.0, raw_mean)
             pad = [past_aqis[0]] * (48 - len(past_aqis))
-            return (pad + past_aqis)[-48:]
+            scaled = [(x * scale) for x in (pad + past_aqis)[-48:]]
+            return [round(min(500.0, max(50.0, x)), 1) for x in scaled]
     except Exception as e:
-        logger.warning("Direct Open-Meteo fetch in _get_recent_aqi_buffer failed (%s) — using fallback baseline buffer.", e)
+        logger.warning("Direct Open-Meteo fetch in _get_recent_aqi_buffer failed (%s) — using ward CPCB baseline.", e)
 
-    # Realistic 48-hour baseline buffer around ~155 AQI with diurnal oscillation
-    return [float(150 + 15 * ((i % 24) / 24.0)) for i in range(48)]
+    # Ward-calibrated 48-hour buffer with realistic diurnal curve
+    return [round(cpcb_baseline + 18.0 * math.sin(i * math.pi / 12.0), 1) for i in range(48)]
 
 
 def _explain_top_features(

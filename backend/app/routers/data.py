@@ -4,8 +4,10 @@ Exposes endpoints to fetch weather, AQI, traffic, and construction data.
 Strictly delegates all business logic and data fetching to the service layer.
 """
 
-from typing import Optional
+from typing import Optional, Any, List, Tuple
 from datetime import datetime, timezone
+import time
+import json
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,8 +15,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models.db_models import Ward
 from app.models.schemas import TrafficSignal, ConstructionSignal, WeatherResponse, WardAQI, HeatmapWard, AQIHistoryRecord
-from typing import Any, List
-import json
 from app.redis_client import redis_client
 
 # Service functions
@@ -26,6 +26,9 @@ from app.data_ingestion.heatmap import get_heatmap_data, HeatmapError
 
 
 router = APIRouter()
+
+_IN_MEM_HEATMAP_CACHE: Optional[Tuple[float, Any]] = None
+_IN_MEM_AQI_CACHE: dict[str, Tuple[float, Any]] = {}
 
 
 @router.get("/wards")
@@ -54,20 +57,29 @@ async def get_heatmap_endpoint(session: AsyncSession = Depends(get_db)) -> Any:
     Fetches AQI information for ALL wards to render the pollution heatmap.
     Returns exactly one object per ward with the latest AQI reading.
     """
+    global _IN_MEM_HEATMAP_CACHE
+    now = time.time()
+    if _IN_MEM_HEATMAP_CACHE and (now - _IN_MEM_HEATMAP_CACHE[0]) < 300:
+        return _IN_MEM_HEATMAP_CACHE[1]
+
     cache_key = "heatmap"
     try:
         cached_data = await redis_client.get(cache_key)
         if cached_data:
-            return json.loads(cached_data)
+            parsed = json.loads(cached_data)
+            _IN_MEM_HEATMAP_CACHE = (now, parsed)
+            return parsed
     except Exception:
         pass
 
     try:
         data = await get_heatmap_data(session=session)
         try:
-            await redis_client.setex(cache_key, 300, json.dumps([w.model_dump(mode='json') for w in data]))
+            dumped = [w.model_dump(mode='json') for w in data]
+            await redis_client.setex(cache_key, 300, json.dumps(dumped))
         except Exception:
             pass
+        _IN_MEM_HEATMAP_CACHE = (now, data)
         return data
     except HeatmapError as e:
         raise HTTPException(
@@ -132,11 +144,18 @@ async def get_aqi_endpoint(
     Fetches the latest AQI reading for a specific ward.
     Delegates entirely to the get_aqi service function.
     """
+    global _IN_MEM_AQI_CACHE
+    now = time.time()
+    if ward_id in _IN_MEM_AQI_CACHE and (now - _IN_MEM_AQI_CACHE[ward_id][0]) < 300:
+        return _IN_MEM_AQI_CACHE[ward_id][1]
+
     cache_key = f"aqi:{ward_id}"
     try:
         cached_data = await redis_client.get(cache_key)
         if cached_data:
-            return json.loads(cached_data)
+            parsed = json.loads(cached_data)
+            _IN_MEM_AQI_CACHE[ward_id] = (now, parsed)
+            return parsed
     except Exception:
         pass
 
@@ -149,6 +168,9 @@ async def get_aqi_endpoint(
             ward_name = await session.scalar(select(Ward.name).where(Ward.id == ward_id))
         except Exception:
             pass
+        if not ward_name:
+            from app.data_ingestion.cpcb_aqi import get_ward_info
+            ward_name = get_ward_info(ward_id).get("ward_name")
 
         # Simple AQI categorization logic for the hackathon
         aqi_val = reading.aqi_value
@@ -180,6 +202,7 @@ async def get_aqi_endpoint(
             await redis_client.setex(cache_key, 300, json.dumps(response_data.model_dump(mode='json')))
         except Exception:
             pass
+        _IN_MEM_AQI_CACHE[ward_id] = (now, response_data)
         return response_data
     except AQIIngestionError as e:
         raise HTTPException(
