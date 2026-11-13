@@ -1,7 +1,17 @@
 // THE single shared API client. Owner: Person D. Change only by team agreement.
 // Paths mirror the DOCX Section 6 contract EXACTLY. Never fetch a backend URL directly elsewhere.
 
-const BASE = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
+// Resolve backend API URL with cloud production fallback
+const rawBase = (import.meta.env.VITE_API_BASE_URL || "").trim();
+let calculatedBase = rawBase;
+if (!calculatedBase) {
+  calculatedBase = typeof window !== "undefined" && window.location.hostname.includes("onrender.com")
+    ? "https://airpulse-backend-jv0l.onrender.com"
+    : "http://localhost:8000";
+} else if (!calculatedBase.startsWith("http://") && !calculatedBase.startsWith("https://")) {
+  calculatedBase = `https://${calculatedBase}`;
+}
+const BASE = calculatedBase.replace(/\/+$/, "");
 
 async function get<T>(path: string): Promise<T> {
   const res = await fetch(`${BASE}${path}`);

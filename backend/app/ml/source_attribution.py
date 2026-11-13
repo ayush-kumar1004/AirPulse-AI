@@ -14,6 +14,7 @@ Replaces fixed weights with:
   5. Real LLM-Generated Natural Language Reasoning:
      - Synthesizes exact chemical ratios and dispersion physics via LLM.
 """
+import asyncio
 import json
 import logging
 import math
@@ -422,24 +423,44 @@ async def attribute(session: AsyncSession, ward_id: str) -> dict:
         hour_local=local_hour,
     )
 
-    # 4. Generate LLM explanation
-    reasoning = _generate_llm_reasoning(
-        ward_id=ward_id,
-        shares=shares,
-        dominant_source=dominant_source,
-        pm25=pm25,
-        pm10=pm10,
-        no2=no2,
-        ratio=diagnostics["pm25_pm10_ratio"],
-        nearest_zone=nearest_zone,
-        distance_km=distance_km,
-        wind_label=wind_label,
-        wind_kph=wind_kph,
-        plume_alignment=plume_alignment,
-        active_sites=construction_data.active_sites,
-        humidity=humidity,
-        rain_mm=rain_mm,
-    )
+    # 4. Generate LLM explanation off the event loop with bounded timeout
+    try:
+        reasoning = await asyncio.wait_for(
+            asyncio.to_thread(
+                _generate_llm_reasoning,
+                ward_id=ward_id,
+                shares=shares,
+                dominant_source=dominant_source,
+                pm25=pm25,
+                pm10=pm10,
+                no2=no2,
+                ratio=diagnostics["pm25_pm10_ratio"],
+                nearest_zone=nearest_zone,
+                distance_km=distance_km,
+                wind_label=wind_label,
+                wind_kph=wind_kph,
+                plume_alignment=plume_alignment,
+                active_sites=construction_data.active_sites,
+                humidity=humidity,
+                rain_mm=rain_mm,
+            ),
+            timeout=4.0,
+        )
+    except Exception as e:
+        logger.info(f"LLM reasoning timed out or failed ({e}) — falling back to deterministic physics explanation.")
+        reasoning = _dynamic_fallback_reasoning(
+            dominant_source=dominant_source,
+            shares=shares,
+            ratio=diagnostics["pm25_pm10_ratio"],
+            pm25=pm25,
+            pm10=pm10,
+            no2=no2,
+            nearest_zone=nearest_zone,
+            distance_km=distance_km,
+            wind_label=wind_label,
+            wind_kph=wind_kph,
+            active_sites=construction_data.active_sites,
+        )
 
     confidence = _compute_confidence(
         has_real_aqi,

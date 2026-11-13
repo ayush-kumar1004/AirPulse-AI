@@ -185,6 +185,7 @@ def get_llm(provider: str = "gemini", temperature: float = 0.0, api_key: str | N
             # succeed by retrying — so retries silently multiplied the cost of
             # each failure until the whole day's budget was gone.
             max_retries=0,
+            request_timeout=10.0,
         )
     elif provider == "claude":
         from langchain_anthropic import ChatAnthropic

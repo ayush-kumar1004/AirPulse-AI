@@ -2,6 +2,8 @@
 # Real logic: app.llm.recommendation_agent, app.llm.citizen_advisor, app.llm.officer_chat.
 import json
 import logging
+import time
+from typing import Any
 
 from fastapi import APIRouter, Query
 from fastapi.concurrency import run_in_threadpool
@@ -25,27 +27,34 @@ logger = logging.getLogger(__name__)
 # per day. Air quality moves slowly, so serving a cached answer for 30 minutes is
 # both accurate enough and the difference between a working demo and a 429.
 LLM_CACHE_SECONDS = 30 * 60
+_IN_MEM_AGENT_CACHE: dict[str, tuple[float, Any]] = {}
 
 
 async def _cached_llm(cache_key: str, fn, *args):
-    """Run a blocking LLM agent off the event loop, caching its result in Redis.
+    """Run a blocking LLM agent off the event loop, caching its result in Memory & Redis.
 
-    Redis problems are logged and ignored — a cache outage must not take the
-    endpoint down with it.
+    Memory cache ensures sub-millisecond response even without external Redis.
     """
+    cached_mem = _IN_MEM_AGENT_CACHE.get(cache_key)
+    if cached_mem and (time.monotonic() - cached_mem[0] < LLM_CACHE_SECONDS):
+        return cached_mem[1]
+
     try:
         cached = await redis_client.get(cache_key)
         if cached:
-            return json.loads(cached)
+            parsed = json.loads(cached)
+            _IN_MEM_AGENT_CACHE[cache_key] = (time.monotonic(), parsed)
+            return parsed
     except Exception:
-        logger.warning("Cache read failed for %s — calling the model.", cache_key, exc_info=True)
+        logger.warning("Cache read failed for %s — calling the model.", cache_key, exc_info=False)
 
     data = await run_in_threadpool(fn, *args)
 
+    _IN_MEM_AGENT_CACHE[cache_key] = (time.monotonic(), data)
     try:
         await redis_client.setex(cache_key, LLM_CACHE_SECONDS, json.dumps(data, default=str))
     except Exception:
-        logger.warning("Cache write failed for %s.", cache_key, exc_info=True)
+        pass
 
     return data
 
