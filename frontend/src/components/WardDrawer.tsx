@@ -84,7 +84,39 @@ export default function WardDrawer({
   forecastData,
 }: WardDrawerProps) {
   const navigate = useNavigate();
-  // Empty State
+
+  const forecastPoints = forecastData?.points ?? [];
+  const hasForecast = forecastPoints.length > 1;
+
+  // Generate SVG path for the 24h forecast. Must be called unconditionally before any early returns.
+  const svgPaths = useMemo(() => {
+    const points = forecastPoints;
+    if (points.length < 2) return { linePath: "", areaPath: "" };
+
+    const width = 200;
+    const height = 80;
+    const mappedAqiValues = points.map((p: any) => p.predicted_aqi ?? p.aqi);
+    const minAQI = Math.min(...mappedAqiValues);
+    const maxAQI = Math.max(...mappedAqiValues);
+    const range = maxAQI - minAQI || 1;
+
+    const coords = points.map((p: any, index: number) => {
+      const x = (index / (points.length - 1)) * width;
+      const aqiValue = p.predicted_aqi ?? p.aqi;
+      const y = height - 12 - ((aqiValue - minAQI) / range) * (height - 24);
+      return { x, y };
+    });
+
+    const linePath = coords
+      .map((c, i) => `${i === 0 ? "M" : "L"}${c.x.toFixed(1)},${c.y.toFixed(1)}`)
+      .join(" ");
+
+    const areaPath = `${linePath} L${width},${height} L0,${height} Z`;
+
+    return { linePath, areaPath };
+  }, [forecastPoints]);
+
+  // Empty State - placed AFTER all React hooks
   if (!wardId) {
     return (
       <aside className="w-full h-full bg-[#1E293B]/60 backdrop-blur-md rounded-2xl p-6 border border-[#334155] text-center text-[#bbc9cd] min-h-[400px] flex items-center justify-center">
@@ -112,38 +144,6 @@ export default function WardDrawer({
   const activeConstruction = attributionData?.construction ?? null;
   const activeIndustry = attributionData?.industry ?? null;
   const activeDust = attributionData?.dust ?? null;
-
-  const forecastPoints = forecastData?.points ?? [];
-  const hasForecast = forecastPoints.length > 1;
-
-  // Generate SVG path for the 24h forecast. Empty when there is nothing to plot.
-  const svgPaths = useMemo(() => {
-    const points = forecastPoints;
-    if (points.length < 2) return { linePath: "", areaPath: "" };
-
-    const width = 200;
-    const height = 80;
-    // Map points to fit SVG box
-    const mappedAqiValues = points.map((p: any) => p.predicted_aqi ?? p.aqi);
-    const minAQI = Math.min(...mappedAqiValues);
-    const maxAQI = Math.max(...mappedAqiValues);
-    const range = maxAQI - minAQI || 1;
-
-    const coords = points.map((p: any, index: number) => {
-      const x = (index / (points.length - 1)) * width;
-      const aqiValue = p.predicted_aqi ?? p.aqi;
-      const y = height - 12 - ((aqiValue - minAQI) / range) * (height - 24);
-      return { x, y };
-    });
-
-    const linePath = coords
-      .map((c, i) => `${i === 0 ? "M" : "L"}${c.x.toFixed(1)},${c.y.toFixed(1)}`)
-      .join(" ");
-
-    const areaPath = `${linePath} L${width},${height} L0,${height} Z`;
-
-    return { linePath, areaPath };
-  }, [forecastPoints]);
 
   // Sources breakdown array
   const sources = [
