@@ -85,9 +85,23 @@ def gemini_keys() -> list[str]:
     return out
 
 
+def mistral_keys() -> list[str]:
+    """Every configured Mistral key, in order, without duplicates.
+
+    Reads MISTRAL_API_KEY plus optional MISTRAL_API_KEYS pool.
+    """
+    raw = [settings.mistral_api_key or ""] + (settings.mistral_api_keys or "").split(",")
+    seen, out = set(), []
+    for k in (x.strip() for x in raw):
+        if k and k not in seen:
+            seen.add(k)
+            out.append(k)
+    return out
+
+
 def _is_quota_error(exc: Exception) -> bool:
     text = str(exc).lower()
-    return "429" in text or "quota" in text or "resourceexhausted" in text or "rate limit" in text
+    return "429" in text or "quota" in text or "resourceexhausted" in text or "rate limit" in text or "rate_limit" in text
 
 
 def _mark_exhausted(key: str) -> None:
@@ -98,7 +112,7 @@ def _mark_exhausted(key: str) -> None:
         reset += timedelta(days=1)
     _exhausted_until[key] = reset
     logger.warning(
-        "Gemini key ...%s hit its quota — skipping it until %s UTC.", key[-4:], reset.strftime("%H:%M %d-%b")
+        "LLM key ...%s hit its quota — skipping it until %s UTC.", key[-4:], reset.strftime("%H:%M %d-%b")
     )
 
 
@@ -107,27 +121,44 @@ def _available_gemini_keys() -> list[str]:
     return [k for k in gemini_keys() if _exhausted_until.get(k, now) <= now]
 
 
+def _available_mistral_keys() -> list[str]:
+    now = datetime.now(timezone.utc)
+    return [k for k in mistral_keys() if _exhausted_until.get(k, now) <= now]
+
+
 def run_with_failover(work, temperature: float = 0.0):
     """Run `work(llm)`, moving to the next credential whenever one is out of quota.
 
-    Tries each Gemini key that is not currently parked, then OpenAI, Claude and
-    Kimi if their keys are set. A key that reports a quota error is parked until
+    Tries credentials based on LLM_PROVIDER or available keys (Mistral, Gemini,
+    OpenAI, Claude, Kimi). A key that reports a quota error is parked until
     the daily reset so later requests skip it immediately instead of spending a
-    call to rediscover it. Non-quota errors are raised straight away — they mean
-    a real bug, and burning the other keys on it would help nobody.
+    call to rediscover it. Non-quota errors are raised straight away.
     """
-    attempts: list[tuple[str, str | None]] = [("gemini", k) for k in _available_gemini_keys()]
+    preferred = (settings.llm_provider or "").strip().lower()
+    m_keys = _available_mistral_keys()
+    g_keys = _available_gemini_keys()
+
+    attempts: list[tuple[str, str | None]] = []
+
+    # If Mistral is explicitly requested, or if Mistral key is provided and preferred
+    if preferred == "mistral" or (m_keys and not g_keys) or (m_keys and preferred != "gemini"):
+        attempts.extend([("mistral", k) for k in m_keys])
+        attempts.extend([("gemini", k) for k in g_keys])
+    else:
+        attempts.extend([("gemini", k) for k in g_keys])
+        attempts.extend([("mistral", k) for k in m_keys])
+
     for name, key in (
         ("gpt", (settings.openai_api_key or "").strip()),
         ("claude", (settings.anthropic_api_key or "").strip()),
         ("kimi", (settings.kimi_api_key or "").strip()),
     ):
-        if key:
+        if key and (name, key) not in attempts:
             attempts.append((name, key))
 
     if not attempts:
         raise ValueError(
-            "No LLM credentials configured. Set GEMINI_API_KEY (or GEMINI_API_KEYS / "
+            "No LLM credentials configured. Set MISTRAL_API_KEY (or GEMINI_API_KEY / "
             "OPENAI_API_KEY / ANTHROPIC_API_KEY / KIMI_API_KEY) in backend/.env."
         )
 
@@ -139,7 +170,7 @@ def run_with_failover(work, temperature: float = 0.0):
             if not _is_quota_error(e):
                 raise
             last_error = e
-            if provider == "gemini" and key:
+            if provider in ("gemini", "mistral") and key:
                 _mark_exhausted(key)
             else:
                 logger.warning("%s provider is out of quota — trying the next credential.", provider)
@@ -150,29 +181,54 @@ def run_with_failover(work, temperature: float = 0.0):
 
 def get_llm(provider: str = "gemini", temperature: float = 0.0, api_key: str | None = None):
     """Return a configured LangChain chat model.
-    provider: 'gemini' (default) | 'claude' | 'gpt' | 'kimi'
+    provider: 'gemini' | 'mistral' | 'claude' | 'gpt' | 'kimi'
     api_key: use this specific credential instead of the configured default.
     """
     gemini_key = (api_key if provider == "gemini" and api_key else "") or next(iter(gemini_keys()), "")
+    mistral_key = (api_key if provider == "mistral" and api_key else "") or next(iter(mistral_keys()), "")
     anthropic_key = (api_key if provider == "claude" and api_key else "") or (settings.anthropic_api_key or "").strip()
     openai_key = (api_key if provider == "gpt" and api_key else "") or (settings.openai_api_key or "").strip()
     kimi_key = (api_key if provider == "kimi" and api_key else "") or (settings.kimi_api_key or "").strip()
 
     # Auto-fallback if the requested provider's key is not set.
     if provider == "gemini" and not gemini_key:
-        if anthropic_key:
+        if mistral_key:
+            provider = "mistral"
+        elif anthropic_key:
             provider = "claude"
         elif openai_key:
             provider = "gpt"
         elif kimi_key:
             provider = "kimi"
-    elif provider == "claude" and not anthropic_key:
+    elif provider == "mistral" and not mistral_key:
         if gemini_key:
             provider = "gemini"
         elif openai_key:
             provider = "gpt"
+        elif anthropic_key:
+            provider = "claude"
+        elif kimi_key:
+            provider = "kimi"
+    elif provider == "claude" and not anthropic_key:
+        if mistral_key:
+            provider = "mistral"
+        elif gemini_key:
+            provider = "gemini"
+        elif openai_key:
+            provider = "gpt"
 
-    if provider == "gemini":
+    if provider == "mistral":
+        if not mistral_key:
+            raise ValueError("Mistral API key is not configured. Set MISTRAL_API_KEY.")
+        return ChatOpenAI(
+            model=settings.mistral_model or "mistral-small-latest",
+            base_url="https://api.mistral.ai/v1",
+            api_key=mistral_key,
+            temperature=temperature,
+            max_retries=1,
+            request_timeout=25.0,
+        )
+    elif provider == "gemini":
         if not gemini_key:
             raise ValueError("Gemini API key is not configured. Set GEMINI_API_KEY.")
         from langchain_google_genai import ChatGoogleGenerativeAI

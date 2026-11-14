@@ -51,6 +51,12 @@ class Settings(BaseSettings):
     openaq_api_key: str = ""
 
     # LLM providers (Person C)
+    llm_provider: str = ""  # "auto" | "mistral" | "gemini" | "claude" | "gpt" | "kimi"
+    mistral_api_key: str = ""
+    # Optional comma-separated pool for Mistral API keys
+    mistral_api_keys: str = ""
+    # Flagship fast, generous free-tier model ("mistral-small-latest", "open-mistral-7b", "mistral-large-latest")
+    mistral_model: str = "mistral-small-latest"
     anthropic_api_key: str = ""
     openai_api_key: str = ""
     kimi_api_key: str = ""
