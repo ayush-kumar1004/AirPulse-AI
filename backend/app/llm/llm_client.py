@@ -104,16 +104,28 @@ def _is_quota_error(exc: Exception) -> bool:
     return "429" in text or "quota" in text or "resourceexhausted" in text or "rate limit" in text or "rate_limit" in text
 
 
-def _mark_exhausted(key: str) -> None:
-    """Park a key until the daily quota resets (midnight US Pacific = UTC-8)."""
+def _mark_exhausted(key: str, is_short_window: bool = False) -> None:
+    """Park a key until the quota resets.
+
+    Mistral enforces a 1-minute rolling rate limit on free tier, so we pause it
+    for 65 seconds. Gemini enforces a daily quota, so we park it until 08:00 UTC.
+    """
     now = datetime.now(timezone.utc)
-    reset = (now + timedelta(days=1)).replace(hour=8, minute=0, second=0, microsecond=0)
-    if reset <= now:
-        reset += timedelta(days=1)
+    if is_short_window:
+        reset = now + timedelta(seconds=65)
+        logger.warning(
+            "Mistral key ...%s reached 1-minute rate limit — pausing for 65s until %s UTC.",
+            key[-4:],
+            reset.strftime("%H:%M:%S"),
+        )
+    else:
+        reset = (now + timedelta(days=1)).replace(hour=8, minute=0, second=0, microsecond=0)
+        if reset <= now:
+            reset += timedelta(days=1)
+        logger.warning(
+            "LLM key ...%s hit its daily quota — skipping it until %s UTC.", key[-4:], reset.strftime("%H:%M %d-%b")
+        )
     _exhausted_until[key] = reset
-    logger.warning(
-        "LLM key ...%s hit its quota — skipping it until %s UTC.", key[-4:], reset.strftime("%H:%M %d-%b")
-    )
 
 
 def _available_gemini_keys() -> list[str]:
@@ -171,7 +183,7 @@ def run_with_failover(work, temperature: float = 0.0):
                 raise
             last_error = e
             if provider in ("gemini", "mistral") and key:
-                _mark_exhausted(key)
+                _mark_exhausted(key, is_short_window=(provider == "mistral"))
             else:
                 logger.warning("%s provider is out of quota — trying the next credential.", provider)
 
@@ -221,7 +233,7 @@ def get_llm(provider: str = "gemini", temperature: float = 0.0, api_key: str | N
         if not mistral_key:
             raise ValueError("Mistral API key is not configured. Set MISTRAL_API_KEY.")
         return ChatOpenAI(
-            model=settings.mistral_model or "mistral-small-latest",
+            model=settings.mistral_model or "open-mistral-7b",
             base_url="https://api.mistral.ai/v1",
             api_key=mistral_key,
             temperature=temperature,

@@ -55,8 +55,8 @@ class Settings(BaseSettings):
     mistral_api_key: str = ""
     # Optional comma-separated pool for Mistral API keys
     mistral_api_keys: str = ""
-    # Flagship fast, generous free-tier model ("mistral-small-latest", "open-mistral-7b", "mistral-large-latest")
-    mistral_model: str = "mistral-small-latest"
+    # Flagship fast, generous free-tier model ("open-mistral-7b", "ministral-8b-latest", "codestral-latest")
+    mistral_model: str = "open-mistral-7b"
     anthropic_api_key: str = ""
     openai_api_key: str = ""
     kimi_api_key: str = ""

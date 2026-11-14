@@ -17,7 +17,14 @@ def _clean_and_parse_json(text: str) -> dict:
         if lines and lines[-1].startswith("```"):
             lines = lines[:-1]
         text = "\n".join(lines).strip()
-    return json.loads(text)
+    try:
+        return json.loads(text, strict=False)
+    except Exception:
+        import re
+        m = re.search(r"\{.*\}", text, re.DOTALL)
+        if m:
+            return json.loads(m.group(0), strict=False)
+        raise
 
 
 def advise(ward_id: str, language: str = "en", profile: str | None = None) -> dict:
