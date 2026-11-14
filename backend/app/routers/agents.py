@@ -30,6 +30,13 @@ LLM_CACHE_SECONDS = 30 * 60
 _IN_MEM_AGENT_CACHE: dict[str, tuple[float, Any]] = {}
 
 
+def _is_cacheable(data: Any) -> bool:
+    if not data or not isinstance(data, dict):
+        return False
+    data_str = json.dumps(data, default=str).lower()
+    return "fallback action triggered" not in data_str and "quota exceeded" not in data_str and "429" not in data_str
+
+
 async def _cached_llm(cache_key: str, fn, *args):
     """Run a blocking LLM agent off the event loop, caching its result in Memory & Redis.
 
@@ -37,24 +44,27 @@ async def _cached_llm(cache_key: str, fn, *args):
     """
     cached_mem = _IN_MEM_AGENT_CACHE.get(cache_key)
     if cached_mem and (time.monotonic() - cached_mem[0] < LLM_CACHE_SECONDS):
-        return cached_mem[1]
+        if _is_cacheable(cached_mem[1]):
+            return cached_mem[1]
 
     try:
         cached = await redis_client.get(cache_key)
         if cached:
             parsed = json.loads(cached)
-            _IN_MEM_AGENT_CACHE[cache_key] = (time.monotonic(), parsed)
-            return parsed
+            if _is_cacheable(parsed):
+                _IN_MEM_AGENT_CACHE[cache_key] = (time.monotonic(), parsed)
+                return parsed
     except Exception:
         logger.warning("Cache read failed for %s — calling the model.", cache_key, exc_info=False)
 
     data = await run_in_threadpool(fn, *args)
 
-    _IN_MEM_AGENT_CACHE[cache_key] = (time.monotonic(), data)
-    try:
-        await redis_client.setex(cache_key, LLM_CACHE_SECONDS, json.dumps(data, default=str))
-    except Exception:
-        pass
+    if _is_cacheable(data):
+        _IN_MEM_AGENT_CACHE[cache_key] = (time.monotonic(), data)
+        try:
+            await redis_client.setex(cache_key, LLM_CACHE_SECONDS, json.dumps(data, default=str))
+        except Exception:
+            pass
 
     return data
 
